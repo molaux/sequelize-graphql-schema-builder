@@ -1,5 +1,5 @@
 {
-  "name": "graphql-sequelize-r",
+  "name": "@molaux/graphql-sequelize-r",
   "version": "1.0.0",
   "description": "Provides relations and queries on top of graphql-seqelize",
   "main": "src/index.js",
