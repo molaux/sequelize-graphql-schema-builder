@@ -5,14 +5,14 @@ const {
   GraphQLBoolean,
   GraphQLList
 } = require('graphql')
+
 const { GraphQLJSON } = require('graphql-type-json')
 const { attributeFields, resolver, typeMapper } = require('graphql-sequelize')
 const pluralize = require('pluralize')
 const ucfirst = require('ucfirst')
 const DataTypes = require('sequelize/lib/data-types')
 const {
-  beforeAssociationResolver,
-  beforeModelResolver
+  beforeResolver
 } = require('./lib/utils.js')
 
 typeMapper.mapType((type) => {
@@ -24,7 +24,7 @@ typeMapper.mapType((type) => {
   return false
 })
 
-const autoSequelize = (db, extraFields, extraTypes) => {
+const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes) => {
   let queries = {}
 
   let modelsTypes = {}
@@ -54,7 +54,7 @@ const autoSequelize = (db, extraFields, extraTypes) => {
           required: { type: GraphQLBoolean }
         },
         resolve: resolver(association, {
-          before: (...args) => beforeModelResolver(association.target)(beforeAssociationResolver(association.target)(...args), ...args.slice(1))
+          before: beforeResolver(association.target)
         })
       })
     }
@@ -67,7 +67,7 @@ const autoSequelize = (db, extraFields, extraTypes) => {
       description: `${modelName} description...`,
       fields: () => ({
         ...attributeFields(model),
-        ...extraFields({ modelsTypes }, model),
+        ...extraModelFields({ modelsTypes }, model),
         ...Object.keys(associationFields).reduce((o, associationField) => {
           o[associationField] = associationFields[associationField]()
           return o
@@ -78,6 +78,11 @@ const autoSequelize = (db, extraFields, extraTypes) => {
     // keep a trace of models to reuse in associations
     modelsTypes[originalModelName] = modelType
 
+    modelsTypes = {
+      ...modelsTypes,
+      ...extraModelTypes({ modelsTypes }, modelName, model)
+    }
+
     // Root models query
     queries[pluralize(modelName)] = {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
@@ -87,15 +92,20 @@ const autoSequelize = (db, extraFields, extraTypes) => {
         required: { type: GraphQLBoolean }
       },
       resolve: resolver(model, {
-        before: (...args) => beforeModelResolver(model)(beforeAssociationResolver(model)(...args), ...args.slice(1))
+        before: beforeResolver(model)
       })
+    }
+
+    queries = {
+      ...queries,
+      ...extraModelQueries({ modelsTypes }, modelName, model, queries)
     }
   }
 
-  modelsTypes = {
-    ...modelsTypes,
-    ...extraTypes({ modelsTypes })
-  }
+  // modelsTypes = {
+  //   ...modelsTypes,
+  //   ...extraTypes({ modelsTypes })
+  // }
 
   return {
     modelsTypes,
@@ -105,6 +115,5 @@ const autoSequelize = (db, extraFields, extraTypes) => {
 
 module.exports = {
   autoSequelize,
-  beforeAssociationResolver,
-  beforeModelResolver
+  beforeResolver
 }

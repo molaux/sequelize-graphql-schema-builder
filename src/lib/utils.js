@@ -311,5 +311,6 @@ module.exports = {
   getFieldQuery,
   cleanWhereQuery,
   beforeAssociationResolver,
-  beforeModelResolver
+  beforeModelResolver,
+  beforeResolver: model => (...args) => beforeModelResolver(model)(beforeAssociationResolver(model)(...args), ...args.slice(1))
 }
