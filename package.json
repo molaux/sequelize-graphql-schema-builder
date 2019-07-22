@@ -11,7 +11,7 @@
     "sequelize"
   ],
   "author": "Marc-Olivier Laux",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "pluralize": "^8.0.0",
     "ucfirst": "^1.0.0"
