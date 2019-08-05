@@ -275,7 +275,9 @@ const beforeModelResolver = (targetModel) => (findOptions, { query }, context, i
           const dataType = targetModel.rawAttributes[attribute].type
           if (dataType instanceof DataTypes.DECIMAL) {
             return [targetModel.sequelize.fn('SUM', targetModel.sequelize.col(attribute)), attribute]
-          } else { // TODO: add more aggregations types
+          } else if (dataType instanceof DataTypes.DATE || dataType instanceof DataTypes.DATEONLY) {
+            return [targetModel.sequelize.fn('MAX', targetModel.sequelize.col(attribute)), attribute]
+          } { // TODO: add more aggregations types
             return [targetModel.sequelize.fn('AVG', targetModel.sequelize.col(attribute)), attribute]
           }
         }
@@ -296,6 +298,12 @@ const beforeModelResolver = (targetModel) => (findOptions, { query }, context, i
         ['ASC', 'DESC'].includes(field[1]), true)
     ) {
       findOptions.order = query.order
+    }
+    // console.log(query)
+    // Manage the limit clause
+    if (query.limit !== undefined) {
+      findOptions.limit = query.limit
+      findOptions.subQuery = false
     }
   }
   // console.log(targetModel.name, util.inspect(infos, false, null, true /* enable colors */))
