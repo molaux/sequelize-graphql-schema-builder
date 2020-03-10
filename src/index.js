@@ -12,7 +12,8 @@ const pluralize = require('pluralize')
 const ucfirst = require('ucfirst')
 const DataTypes = require('sequelize/lib/data-types')
 const {
-  beforeResolver
+  beforeResolver,
+  getRequestedAttributes,
 } = require('./lib/utils.js')
 
 typeMapper.mapType((type) => {
@@ -92,7 +93,11 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
         required: { type: GraphQLBoolean }
       },
       resolve: resolver(model, {
-        before: beforeResolver(model)
+        before: ({ attributes, ...otherFindOptions }, args, ctx, infos, ...rest) => beforeResolver(model)({
+            ...otherFindOptions,
+            attributes: getRequestedAttributes(model, infos.fieldNodes[0])
+          }, args, ctx, infos, ...rest)
+        
       })
     }
 
@@ -115,5 +120,6 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
 
 module.exports = {
   autoSequelize,
+  getRequestedAttributes,
   beforeResolver
 }

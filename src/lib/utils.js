@@ -119,6 +119,7 @@ const getNestedIncludes = (model, fieldNode, variables) => {
       }
     }
   }
+
   return [ includes, attributes ]
 }
 
@@ -163,7 +164,9 @@ const cleanWhereQuery = (model, whereClause, type) => {
 
         // dot is not allowed in graphql keys
         if (typeof key === 'string') {
-          key = key.replace(/_/g, '.')
+          if (key.indexOf('_') !== -1) {
+            key = `$${key.replace(/_/g, '.')}$`
+          }
         }
       } else {
         throw Error('key should always be a string !')
@@ -191,8 +194,13 @@ const cleanWhereQuery = (model, whereClause, type) => {
 }
 
 const beforeAssociationResolver = (targetModel) => (findOptions, { query }, context, infos) => {
-  findOptions.attributes = getRequestedAttributes(targetModel, infos.fieldNodes[0])
-  const [ nestedInclude, nestedAttributes ] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues)
+  findOptions.attributes = [
+    ...findOptions.attributes || [],
+    ...getRequestedAttributes(targetModel, infos.fieldNodes[0])
+  ]
+  // console.log('beforeAssociationResolver', findOptions.attributes)
+
+  const [ nestedIncludes, nestedAttributes ] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues)
 
   for (let nestedAttribute of nestedAttributes) {
     if (!findOptions.attributes.includes(nestedAttribute)) {
@@ -206,7 +214,7 @@ const beforeAssociationResolver = (targetModel) => (findOptions, { query }, cont
   const requestedAttributes = infos.fieldNodes[0].selectionSet.selections
     .map(({ name: { value } }) => value)
 
-  findOptions.include = nestedInclude
+  findOptions.include = [ ...findOptions.include || [], ...nestedIncludes ]
 
   for (let field of requestedAttributes) {
     // if requested attribute is an association
@@ -225,7 +233,6 @@ const beforeAssociationResolver = (targetModel) => (findOptions, { query }, cont
       }
     }
   }
-  // console.log(targetModel.name, findOptions.attributes)
 
   return findOptions
 }
