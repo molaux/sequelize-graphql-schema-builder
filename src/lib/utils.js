@@ -15,13 +15,16 @@ const mapAttributes = (model, { fieldNodes }) => {
   return requestedAttributes.filter(attribute => columns.has(attribute))
 }
 
-const getRequestedAttributes = (model, fieldNode) => {
+const getRequestedAttributes = (model, fieldNode, map) => {
   let attributes = []
+  const fieldMap = map 
+    ? k => map[k] || k
+    : k => k
   const columns = new Set(Object.keys(model.rawAttributes))
 
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
     for (let field of fieldNode.selectionSet.selections) {
-      let fieldName = field.name.value
+      let fieldName = fieldMap(field.name.value)
 
       if (model.associations[fieldName] !== undefined) {
         // attributes = attributes.concat(getNestedAttributes(model.associations[fieldName].target, field).map(nestedAttribute => `${fieldName}.${nestedAttribute}`))
@@ -72,6 +75,8 @@ const getFieldQuery = (model, fieldNode, variables) => {
 const getNestedIncludes = (model, fieldNode, variables) => {
   let includes = []
   let attributes = []
+  let countManyAssociation = 0
+  const maxManyAssociations = 2 // Prevent multi left joins
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
     for (let field of fieldNode.selectionSet.selections) {
       let fieldName = field.name.value
@@ -87,8 +92,10 @@ const getNestedIncludes = (model, fieldNode, variables) => {
           if (!attributes.includes(model.associations[fieldName].options.foreignKey)) {
             attributes.push(model.associations[fieldName].options.foreignKey)
           }
-        }
-        if (model.associations[fieldName].associationType === 'HasMany') {
+        } else if (model.associations[fieldName].associationType === 'HasMany') {
+          if (++countManyAssociation > maxManyAssociations) {
+            continue
+          }
           // Add the missing key
           if (model.associations[fieldName].options.targetKey !== undefined &&
             !attributes.includes(model.associations[fieldName].options.targetKey)) {
@@ -119,7 +126,6 @@ const getNestedIncludes = (model, fieldNode, variables) => {
       }
     }
   }
-
   return [ includes, attributes ]
 }
 
@@ -195,7 +201,7 @@ const cleanWhereQuery = (model, whereClause, type) => {
 
 const beforeAssociationResolver = (targetModel) => (findOptions, { query }, context, infos) => {
   findOptions.attributes = [
-    ...findOptions.attributes || [],
+    ...findOptions.extraAttributes || [],
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0])
   ]
   // console.log('beforeAssociationResolver', findOptions.attributes)
@@ -274,11 +280,16 @@ const beforeModelResolver = (targetModel) => (findOptions, { query }, context, i
     // Manage the group clause
     if (query.group !== undefined && Array.isArray(query.group) && query.group.length) {
       findOptions.order = query.group
+      const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0])
+      // console.log(requestedAttributes)
       findOptions.attributes = findOptions.attributes.map(attribute => {
+        // console.log(attribute)
         if (query.group.includes(attribute)) {
           // if attr is grouped against, return as is
           return attribute
-        } else if (attribute in targetModel.rawAttributes) {
+          // Don't auto-agrregate fields nested by associations 
+        } else if (attribute in targetModel.rawAttributes && requestedAttributes.includes(attribute)) {
+          // console.log(attribute, '###')
           const dataType = targetModel.rawAttributes[attribute].type
           if (dataType instanceof DataTypes.DECIMAL) {
             return [targetModel.sequelize.fn('SUM', targetModel.sequelize.col(attribute)), attribute]
