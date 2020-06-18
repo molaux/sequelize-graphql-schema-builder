@@ -94,6 +94,7 @@ const getNestedIncludes = (model, fieldNode, variables) => {
           }
         } else if (model.associations[fieldName].associationType === 'HasMany') {
           if (++countManyAssociation > maxManyAssociations) {
+            // TODO : avoid include associations with agreggation query
             continue
           }
           // Add the missing key
