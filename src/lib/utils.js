@@ -200,7 +200,10 @@ const cleanWhereQuery = (model, whereClause, type) => {
   }
 }
 
-const beforeAssociationResolver = (targetModel) => (findOptions, { query }, context, infos) => {
+const beforeAssociationResolver = (targetModel) => async (findOptions, { query }, context, infos) => {
+  if (findOptions instanceof Promise) {
+    findOptions = await findOptions
+  }
   findOptions.attributes = [
     ...findOptions.extraAttributes || [],
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0])
@@ -244,10 +247,14 @@ const beforeAssociationResolver = (targetModel) => (findOptions, { query }, cont
   return findOptions
 }
 
-const beforeModelResolver = (targetModel) => (findOptions, { query }, context, infos) => {
+const beforeModelResolver = (targetModel) => async (findOptions, { query }, context, infos) => {
   // console.log('##beforeModelResolver', targetModel.name,  context, infos)
   // If a query has been submitted with association field
   // attributes: [[sequelize.fn('min', sequelize.col('price')), 'minPrice']],
+  if (findOptions instanceof Promise) {
+    findOptions = await findOptions
+  }
+
   if (query !== undefined) {
     // Manage the where clause
     if (query.where !== undefined) {
