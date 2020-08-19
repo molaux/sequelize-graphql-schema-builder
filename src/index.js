@@ -14,6 +14,7 @@ const DataTypes = require('sequelize/lib/data-types')
 const {
   beforeResolver,
   getRequestedAttributes,
+  findOptionsMerger
 } = require('./lib/utils.js')
 
 typeMapper.mapType((type) => {
@@ -121,5 +122,6 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
 module.exports = {
   autoSequelize,
   getRequestedAttributes,
-  beforeResolver
+  beforeResolver,
+  findOptionsMerger
 }

@@ -337,6 +337,32 @@ const beforeModelResolver = (targetModel) => async (findOptions, { query }, cont
   return findOptions
 }
 
+const findOptionsMerger = (fo1, fo2) => {
+  const graphqlContext = fo1.graphqlContext || fo2.graphqlContext
+  delete fo1.graphqlContext
+  delete fo2.graphqlContext
+
+  const findOptions = deepmerge(fo1, fo2)
+
+  if ('include' in findOptions) {
+    const reducedInclude = new Map()
+    for (const include of findOptions.include) {
+      if (!reducedInclude.has(include.model)) {
+        reducedInclude.set(include.model, include)
+      } else {
+        reducedInclude.set(include.model, findOptionsMerger(reducedInclude.get(include.model), include))
+      }
+    }
+    findOptions.include = Array.from(reducedInclude.values())
+  }
+  if (graphqlContext) {
+    fo1.graphqlContext = graphqlContext
+    fo2.graphqlContext = graphqlContext
+    findOptions.graphqlContext = graphqlContext
+  }
+  return findOptions
+}
+
 module.exports = {
   mapAttributes,
   getRequestedAttributes,
@@ -346,5 +372,6 @@ module.exports = {
   cleanWhereQuery,
   beforeAssociationResolver,
   beforeModelResolver,
+  findOptionsMerger,
   beforeResolver: model => (...args) => beforeModelResolver(model)(beforeAssociationResolver(model)(...args), ...args.slice(1))
 }
