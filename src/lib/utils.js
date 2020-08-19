@@ -1,6 +1,7 @@
 'use strict'
 const Sequelize = require('sequelize')
 const DataTypes = require('sequelize/lib/data-types')
+const deepmerge = require('deepmerge')
 
 // const util = require('util')
 
