@@ -1,6 +1,6 @@
 {
   "name": "@molaux/graphql-sequelize-r",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Provides relations and queries on top of graphql-seqelize",
   "main": "src/index.js",
   "scripts": {
@@ -13,14 +13,15 @@
   "author": "Marc-Olivier Laux",
   "license": "MIT",
   "dependencies": {
+    "deepmerge": "^4.2.2",
     "pluralize": "^8.0.0",
     "ucfirst": "^1.0.0"
   },
   "peerDependencies": {
     "graphql": "^0.5.0 || ^0.6.0 || ^0.7.0 || ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14",
     "graphql-relay": "^0.4.2 || ^0.5.0 || ^0.6.0",
-    "sequelize": ">=3.0.0",
     "graphql-sequelize": "^9.3.6",
-    "graphql-type-json": "^0.3.0"
+    "graphql-type-json": "^0.3.0",
+    "sequelize": ">=3.0.0"
   }
 }
