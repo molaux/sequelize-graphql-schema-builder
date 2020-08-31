@@ -3,7 +3,7 @@ const Sequelize = require('sequelize')
 const DataTypes = require('sequelize/lib/data-types')
 const deepmerge = require('deepmerge')
 
-// const util = require('util')
+const util = require('util')
 
 const mapAttributes = (model, { fieldNodes }) => {
   // console.log(fieldNodes)
@@ -59,6 +59,7 @@ const getFieldQuery = (model, fieldNode, variables) => {
   let args = parseGraphQLArgs(fieldNode.arguments, variables)
   if (args.query !== undefined) {
     if (args.query.where !== undefined) {
+     // console.log('getFieldQuery', model, args.query.where, cleanWhereQuery(model, args.query.where))
       query = { where: cleanWhereQuery(model, args.query.where), required: false }
     }
   }
@@ -132,18 +133,20 @@ const getNestedIncludes = (model, fieldNode, variables) => {
 }
 
 const cleanWhereQuery = (model, whereClause, type) => {
-  // console.log(model.name, whereClause)
+  // console.log('start', model.name, whereClause, type)
+
   if (typeof whereClause === 'object') {
     if (Object.keys(whereClause).length > 1) {
       // Dive into branches
       for (let key in whereClause) {
-        let newQuery = cleanWhereQuery(model, { [key]: whereClause[key] }, key)
+        let newQuery = cleanWhereQuery(model, { [key]: whereClause[key] }, type)
 
         delete whereClause[key]
         whereClause = {
           ...whereClause,
           ...newQuery
         }
+        // console.log(newQuery, whereClause)
       }
       return whereClause
     } else if (Object.keys(whereClause).length === 1) {
@@ -169,7 +172,7 @@ const cleanWhereQuery = (model, whereClause, type) => {
           // key = sequelize.col(key)
           // console.log(key)
         }
-
+        // console.log('finalType', finalType)
         // dot is not allowed in graphql keys
         if (typeof key === 'string') {
           if (key.indexOf('_') !== -1) {
@@ -186,8 +189,10 @@ const cleanWhereQuery = (model, whereClause, type) => {
       } else {
         switch (`${finalType}`) {
           case 'DATETIMEOFFSET':
-            // console.log('DATETIMEOFFSET', value, Date.parse(value))
-            value = Sequelize.cast(new Date(Date.parse(value)), 'DATETIMEOFFSET')
+            if (model.sequelize.options.dialect === 'mssql') {
+              // console.log('DATETIMEOFFSET', value, Date.parse(value))
+              value = Sequelize.cast(new Date(Date.parse(value)), 'DATETIMEOFFSET')
+            }
             break
         }
 
