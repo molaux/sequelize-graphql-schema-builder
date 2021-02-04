@@ -35,8 +35,9 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
   for (let modelName in db) {
     const originalModelName = modelName
 
-    modelName = ucfirst(pluralize.singular(modelName))
-    if (modelName === 'Sequelize') {
+    const singularModelName = pluralize.singular(modelName)
+    modelName = ucfirst(singularModelName in db ? modelName : pluralize.singular(modelName))
+    if (modelName === 'Sequelize' || modelName === 'sequelize') {
       continue
     }
     const model = db[originalModelName]
@@ -86,7 +87,8 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
     }
 
     // Root models query
-    queries[pluralize(modelName)] = {
+    let manyModelName = pluralize(modelName)
+    queries[manyModelName === modelName ? `${modelName}s` : manyModelName] = {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
       type: new GraphQLList(modelType),
       args: {
