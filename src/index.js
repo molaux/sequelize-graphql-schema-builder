@@ -26,21 +26,34 @@ typeMapper.mapType((type) => {
   return false
 })
 
-const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes) => {
-  let queries = {}
+const nameFormatterBuilder = namespace => ({
+    namespace,
+    namespaceize:  function (name) { return namespace.length ? `${namespace}_${name}` : name },
+    formatModelName: function (modelName) { return this.namespaceize(ucfirst(modelName)) },
+    formatManyModelName: function (modelName) {
+      const formattedModelName = this.formatModelName(modelName)
+      const manyFormattedModelName = pluralize(formattedModelName)
+      return manyFormattedModelName === formattedModelName ? `${formattedModelName}s` : manyFormattedModelName
+    },
+    formatTypeName: function (type) { return this.formatModelName(type) }
+})
 
+
+const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraModelQueries, extraModelTypes) => {
+  let queries = {}
   let modelsTypes = {}
+  const nameFormatter = nameFormatterBuilder(namespace)
 
   // Generate each model schema and resolver
-  for (let modelName in db) {
-    const originalModelName = modelName
-
-    const singularModelName = pluralize.singular(modelName)
-    modelName = ucfirst(singularModelName in db ? modelName : pluralize.singular(modelName))
+  for (const modelName in db) {
+    // const namespacedOriginalModelName = `${namespace}_${originalModelName}`
     if (modelName === 'Sequelize' || modelName === 'sequelize') {
       continue
     }
-    const model = db[originalModelName]
+
+    const formattedModelName = nameFormatter.formatModelName(modelName)
+    
+    const model = db[modelName]
 
     // Manage association fileds resolvers
     let associationFields = {}
@@ -50,8 +63,8 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
       // Add assotiation fields to request and get it post computed to avoid circular dependance
       associationFields[association.as] = () => ({
         type: association.associationType === 'HasMany'
-          ? new GraphQLList(modelsTypes[association.target.name])
-          : modelsTypes[association.target.name],
+          ? new GraphQLList(modelsTypes[nameFormatter.formatTypeName(association.target.name)])
+          : modelsTypes[nameFormatter.formatTypeName(association.target.name)],
         args: {
           query: { type: GraphQLJSON },
           required: { type: GraphQLBoolean }
@@ -66,11 +79,11 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
     // to avoid circular dependances
 
     let modelType = new GraphQLObjectType({
-      name: modelName,
-      description: `${modelName} description...`,
+      name: nameFormatter.formatTypeName(modelName),
+      description: `${modelName} type`,
       fields: () => ({
         ...attributeFields(model),
-        ...extraModelFields({ modelsTypes }, model),
+        ...extraModelFields({ modelsTypes, nameFormatter }, model),
         ...Object.keys(associationFields).reduce((o, associationField) => {
           o[associationField] = associationFields[associationField]()
           return o
@@ -79,16 +92,16 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
     })
 
     // keep a trace of models to reuse in associations
-    modelsTypes[originalModelName] = modelType
+    modelsTypes[nameFormatter.formatTypeName(modelName)] = modelType
 
     modelsTypes = {
       ...modelsTypes,
-      ...extraModelTypes({ modelsTypes }, modelName, model)
+      ...extraModelTypes({ modelsTypes, nameFormatter }, formattedModelName, model)
     }
 
     // Root models query
-    let manyModelName = pluralize(modelName)
-    queries[manyModelName === modelName ? `${modelName}s` : manyModelName] = {
+    
+    queries[nameFormatter.formatManyModelName(modelName)] = {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
       type: new GraphQLList(modelType),
       args: {
@@ -106,7 +119,7 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
 
     queries = {
       ...queries,
-      ...extraModelQueries({ modelsTypes }, modelName, model, queries)
+      ...extraModelQueries({ modelsTypes, nameFormatter }, formattedModelName, model, queries)
     }
   }
 
@@ -122,8 +135,9 @@ const autoSequelize = (db, extraModelFields, extraModelQueries, extraModelTypes)
 }
 
 module.exports = {
-  autoSequelize,
+  sequelizeToGraphQLSchemaBuilder,
   getRequestedAttributes,
   beforeResolver,
-  findOptionsMerger
+  findOptionsMerger,
+  nameFormatterBuilder
 }
