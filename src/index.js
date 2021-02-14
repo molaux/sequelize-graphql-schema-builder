@@ -9,11 +9,13 @@ const {
 const { GraphQLJSON } = require('graphql-type-json')
 const { attributeFields, resolver, typeMapper } = require('graphql-sequelize')
 const pluralize = require('pluralize')
-const ucfirst = require('ucfirst')
 const DataTypes = require('sequelize/lib/data-types')
+
 const {
   beforeResolver,
   getRequestedAttributes,
+  loggerFactory,
+  nameFormatterFactory,
   findOptionsMerger
 } = require('./lib/utils.js')
 
@@ -26,43 +28,36 @@ typeMapper.mapType((type) => {
   return false
 })
 
-const nameFormatterBuilder = namespace => ({
-    namespace,
-    namespaceize:  function (name) { return namespace.length ? `${namespace}_${name}` : name },
-    formatModelName: function (modelName) { return this.namespaceize(ucfirst(modelName)) },
-    formatManyModelName: function (modelName) {
-      const formattedModelName = this.formatModelName(modelName)
-      const manyFormattedModelName = pluralize(formattedModelName)
-      return manyFormattedModelName === formattedModelName ? `${formattedModelName}s` : manyFormattedModelName
-    },
-    formatTypeName: function (type) { return this.formatModelName(type) }
-})
-
-
-const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraModelQueries, extraModelTypes) => {
+const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelFields, extraModelQueries, extraModelTypes, debug }) => {
   let queries = {}
   let modelsTypes = {}
-  const nameFormatter = nameFormatterBuilder(namespace)
+  const nameFormatter = nameFormatterFactory(namespace)
+  const logger = loggerFactory(debug)
 
   // Generate each model schema and resolver
-  for (const modelName in db) {
-    // const namespacedOriginalModelName = `${namespace}_${originalModelName}`
-    if (modelName === 'Sequelize' || modelName === 'sequelize') {
-      continue
-    }
+  for (const modelName in sequelize.models) {
 
     const formattedModelName = nameFormatter.formatModelName(modelName)
     
-    const model = db[modelName]
+    const model = sequelize.models[modelName]
 
     // Manage association fileds resolvers
     let associationFields = {}
     for (const associationName in model.associations) {
       const association = model.associations[associationName]
-
       // Add assotiation fields to request and get it post computed to avoid circular dependance
-      associationFields[association.as] = () => ({
-        type: association.associationType === 'HasMany'
+      const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
+      const fieldName = nameFormatter.modelToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
+      
+      logger.log('sequelizeToGraphQLSchemaBuilder', {
+        modelName: model.name,
+        associationType: association.associationType,
+        associationAs: association.as,
+        associationTargetName: association.target.name
+      })
+
+      associationFields[fieldName] = () => ({
+        type: isMany
           ? new GraphQLList(modelsTypes[nameFormatter.formatTypeName(association.target.name)])
           : modelsTypes[nameFormatter.formatTypeName(association.target.name)],
         args: {
@@ -70,7 +65,7 @@ const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraM
           required: { type: GraphQLBoolean }
         },
         resolve: resolver(association, {
-          before: beforeResolver(association.target)
+          before: beforeResolver(association.target, { nameFormatter, logger })
         })
       })
     }
@@ -100,8 +95,8 @@ const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraM
     }
 
     // Root models query
-    
-    queries[nameFormatter.formatManyModelName(modelName)] = {
+    const manyModelName = nameFormatter.formatManyModelName(modelName)
+    queries[nameFormatter.modelToFieldName(manyModelName)] = {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
       type: new GraphQLList(modelType),
       args: {
@@ -109,11 +104,25 @@ const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraM
         required: { type: GraphQLBoolean }
       },
       resolve: resolver(model, {
-        before: ({ attributes, ...otherFindOptions }, args, ctx, infos, ...rest) => beforeResolver(model)({
+        before: async ({ attributes, ...otherFindOptions }, args, ctx, infos, ...rest) => {
+          logger.log('root query resolver', {
+            modelName: manyModelName,
+            attributes
+          })
+          
+          const findOptions = await beforeResolver(model, { nameFormatter, logger })({
             ...otherFindOptions,
-            attributes: getRequestedAttributes(model, infos.fieldNodes[0])
+            attributes: getRequestedAttributes(model, infos.fieldNodes[0], logger)
           }, args, ctx, infos, ...rest)
-        
+          
+          logger.log('root query resolver', { 
+            modelName: manyModelName,
+            finalFindOptions: findOptions.attributes, 
+            findOptions: findOptions.include
+          })
+
+          return findOptions
+        }
       })
     }
 
@@ -122,11 +131,6 @@ const sequelizeToGraphQLSchemaBuilder = (db, namespace, extraModelFields, extraM
       ...extraModelQueries({ modelsTypes, nameFormatter }, formattedModelName, model, queries)
     }
   }
-
-  // modelsTypes = {
-  //   ...modelsTypes,
-  //   ...extraTypes({ modelsTypes })
-  // }
 
   return {
     modelsTypes,
@@ -139,5 +143,6 @@ module.exports = {
   getRequestedAttributes,
   beforeResolver,
   findOptionsMerger,
-  nameFormatterBuilder
+  nameFormatterFactory,
+  loggerFactory
 }
