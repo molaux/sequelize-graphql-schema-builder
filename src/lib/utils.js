@@ -2,7 +2,6 @@
 const Sequelize = require('sequelize')
 const DataTypes = require('sequelize/lib/data-types')
 const deepmerge = require('deepmerge')
-const ucfirst = require('ucfirst')
 const pluralize = require('pluralize')
 const util = require('util')
 
@@ -23,7 +22,7 @@ const nameFormatterFactory = namespace => ({
   modelToFieldMap: new Map(),
   fieldToModelMap: new Map(),
   namespaceize:  function (name) { return namespace && namespace.length ? `${namespace}_${name}` : name },
-  formatModelName: function (modelName) { return this.namespaceize(ucfirst(modelName)) },
+  formatModelName: function (modelName) { return this.namespaceize(modelName[0].toUpperCase() + modelName.substr(1)) },
   formatManyModelName: function (modelName) {
     const formattedModelName = this.formatModelName(modelName)
     const manyFormattedModelName = pluralize(formattedModelName)
@@ -31,6 +30,12 @@ const nameFormatterFactory = namespace => ({
   },
   formatModelNameAsField: function (modelName) { return modelName[0].toLowerCase() + modelName.substr(1) },
   formatTypeName: function (type) { return this.formatModelName(type) },
+  formatQueryName: function (queryName) { return this.namespaceize(queryName[0].toLowerCase() + queryName.substr(1)) },
+  formatManyQueryName: function (queryName) { 
+    const formattedQueryName = this.formatQueryName(queryName)
+    const manyFormattedQueryName = pluralize(formattedQueryName)
+    return manyFormattedQueryName === formattedQueryName ? `${formattedQueryName}s` : manyFormattedQueryName
+  },
   modelToFieldName: function (modelName, singularModelName) {
     if (!this.modelToFieldMap.has(modelName)) {
       const fieldName = this.formatModelNameAsField(modelName)
@@ -124,12 +129,12 @@ const getFieldQuery = (model, fieldNode, variables) => {
   return query
 }
 
-const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger }) => {
+const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
   logger.indent()
-  let includes = []
-  let attributes = []
+  const includes = []
+  const attributes = []
   let countManyAssociation = 0
-  const maxManyAssociations = 10 // Prevent multi left joins
+  const _maxManyAssociations = maxManyAssociations || 3 // Prevent multi left joins
   logger.log('getNestedIncludes', {fieldNode})
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
     for (let field of fieldNode.selectionSet.selections) {
@@ -137,7 +142,8 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger 
       logger.log('getNestedIncludes', {
         fieldName,
         'field.name.value': field.name.value,
-        'model.associations': model.associations
+        'model.associations': model.associations,
+        attributes
       })
 
       if (model.associations[fieldName] !== undefined) {
@@ -149,33 +155,42 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger 
         logger.log('getNestedIncludes', {
           fieldName,
           'model.associations[fieldName] !== undefined': true,
-          include
+          include,
+          attributes,
+          includes
         })
 
         if (model.associations[fieldName].associationType === 'BelongsTo') {
+          const fkName = model.associations[fieldName].options.foreignKey.name 
+            ? model.associations[fieldName].options.foreignKey.name
+            : model.associations[fieldName].options.foreignKey
+
           logger.log('getNestedIncludes', {
             fieldName,
             type: 'BelongsTo',
-            fk: model.associations[fieldName].options.foreignKey
+            'model.associations[fieldName].options.foreignKey':fkName
           })
 
           // Add the missing key
-          if (!attributes.includes(model.associations[fieldName].options.foreignKey.name)) {
-            attributes.push(model.associations[fieldName].options.foreignKey.name)
+          if (!attributes.includes(fkName)) {
+            attributes.push(fkName)
           }
         } else if (['HasMany', 'BelongsToMany'].includes(model.associations[fieldName].associationType)) {
-          logger.log('getNestedIncludes', {
-            fieldName,
-            type: 'Many'
-          })
-          if (++countManyAssociation > maxManyAssociations) {
+          if (++countManyAssociation > _maxManyAssociations) {
             // TODO : avoid include associations with agreggation query
             continue
           }
+          const targetKey = model.associations[fieldName].options.targetKey
+          const tkName = targetKey ? targetKey.name ? targetKey.name : targetKey : undefined
+          logger.log('getNestedIncludes', {
+            fieldName,
+            'model.associations[fieldName].options.targetKey': tkName,
+            type: 'Many'
+          })
           // Add the missing key
-          if (model.associations[fieldName].options.targetKey !== undefined &&
-            !attributes.includes(model.associations[fieldName].options.targetKey.name)) {
-            attributes.push(model.associations[fieldName].options.targetKey.name)
+          if (targetKey !== undefined &&
+            !attributes.includes(tkName)) {
+            attributes.push(tkName)
           } else {
             for (let pk in model.primaryKeys) {
               if (!attributes.includes(pk)) {
@@ -185,18 +200,21 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger 
           }
         }
 
-        logger.log('getNestedIncludes', {
-          fieldName,
-          include
-        })
+        let [ nestedIncludes, nestedAttributes ] = getNestedIncludes(model.associations[fieldName].target, field, variables, { nameFormatter, logger, maxManyAssociations })
 
-        let [ nestedIncludes, nestedAttributes ] = getNestedIncludes(model.associations[fieldName].target, field, variables, { nameFormatter, logger })
-
-        for (let nestedAttribute of nestedAttributes) {
+        for (const nestedAttribute of nestedAttributes) {
           if (!include.attributes.includes(nestedAttribute)) {
             include.attributes.push(nestedAttribute)
           }
         }
+
+        logger.log('getNestedIncludes', {
+          fieldName,
+          include,
+          attributes,
+          nestedIncludes,
+          nestedAttributes
+        })
 
         if (nestedIncludes.length) {
           include.include = nestedIncludes
@@ -211,7 +229,12 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger 
       }
     }
   }
+  logger.log('getNestedIncludes : end', {
+    includes,
+    attributes 
+  })
   logger.outdent()
+
   return [ includes, attributes ]
 }
 
@@ -284,7 +307,7 @@ const cleanWhereQuery = (model, whereClause, type) => {
   }
 }
 
-const beforeAssociationResolver = (targetModel, { nameFormatter, logger }) => async (findOptions, { query }, context, infos) => {
+const beforeAssociationResolver = (targetModel, { nameFormatter, logger, maxManyAssociations }) => async (findOptions, { query }, context, infos) => {
   logger.indent()
   logger.log('beforeAssociationResolver', {
     'targetModel.name': targetModel.name
@@ -299,8 +322,7 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger }) => as
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0], logger)
   ]
 
-
-  const [ nestedIncludes, nestedAttributes ] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger })
+  const [ nestedIncludes, nestedAttributes ] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger, maxManyAssociations })
 
   for (let nestedAttribute of nestedAttributes) {
     if (!findOptions.attributes.includes(nestedAttribute)) {
@@ -332,14 +354,18 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger }) => as
       // Active eager load -> left join
       if (targetModel.associations[associationFieldName].associationType === 'BelongsTo') {
         // Add the missing key
-        if (!findOptions.attributes.includes(targetModel.associations[associationFieldName].options.foreignKey.name)) {
-          findOptions.attributes.push(targetModel.associations[associationFieldName].options.foreignKey.name)
+        const fkName = targetModel.associations[associationFieldName].options.foreignKey.name
+          ? targetModel.associations[associationFieldName].options.foreignKey.name
+          : targetModel.associations[associationFieldName].options.foreignKey
+
+        if (!findOptions.attributes.includes(fkName)) {
+          findOptions.attributes.push(fkName)
         }
       }
     }
   }
 
-  logger.log('beforeAssociationResolver', {
+  logger.log('beforeAssociationResolver end', {
     'findOptions.include': findOptions.include,
     'findOptions.attributes': findOptions.attributes
   })
@@ -433,9 +459,10 @@ const beforeModelResolver = (targetModel, { nameFormatter, logger }) => async (f
       findOptions.subQuery = false
     }
   }
-  logger.log('beforeModelResolver', {
+  logger.log('beforeModelResolver end', {
     targetModelName: targetModel.name, 
-    findOptionsInclude: findOptions.include
+    findOptionsInclude: findOptions.include,
+    findOptionsAttributes: findOptions.attributes
   })
   logger.outdent()
 

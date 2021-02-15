@@ -28,7 +28,7 @@ typeMapper.mapType((type) => {
   return false
 })
 
-const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelFields, extraModelQueries, extraModelTypes, debug }) => {
+const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelFields, extraModelQueries, extraModelTypes, debug, maxManyAssociations }) => {
   let queries = {}
   let modelsTypes = {}
   const nameFormatter = nameFormatterFactory(namespace)
@@ -64,7 +64,7 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
           required: { type: GraphQLBoolean }
         },
         resolve: resolver(association, {
-          before: beforeResolver(association.target, { nameFormatter, logger })
+          before: beforeResolver(association.target, { nameFormatter, logger, maxManyAssociations })
         })
       })
     }
@@ -105,8 +105,8 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
 
 
     // Root models query
-    const manyModelName = nameFormatter.formatManyModelName(modelName)
-    queries[nameFormatter.modelToFieldName(manyModelName)] = {
+    const manyQueryName = nameFormatter.formatManyQueryName(modelName)
+    queries[manyQueryName] = {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
       type: new GraphQLList(modelType),
       args: {
@@ -116,19 +116,19 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       resolve: resolver(model, {
         before: async ({ attributes, ...otherFindOptions }, args, ctx, infos, ...rest) => {
           logger.log('root query resolver', {
-            modelName: manyModelName,
+            manyQueryName,
             attributes
           })
           
-          const findOptions = await beforeResolver(model, { nameFormatter, logger })({
+          const findOptions = await beforeResolver(model, { nameFormatter, logger, maxManyAssociations })({
             ...otherFindOptions,
             attributes: getRequestedAttributes(model, infos.fieldNodes[0], logger)
           }, args, ctx, infos, ...rest)
           
           logger.log('root query resolver', { 
-            modelName: manyModelName,
-            finalFindOptions: findOptions.attributes, 
-            findOptions: findOptions.include
+            manyQueryName,
+            finalFindOptionsAttributes: findOptions.attributes, 
+            finalFindOptionsInclude: findOptions.include
           })
 
           return findOptions
@@ -142,7 +142,7 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
     }
   }
 
-  const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, null)
+  const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, undefined)
 
   for (const extraTypeName in extraTypes) {
     if (typesNameSet.has(extraTypes[extraTypeName].name)) {
@@ -154,12 +154,14 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
 
   queries = {
     ...queries,
-    ...extraModelQueries({ modelsTypes, nameFormatter, logger }, null, queries)
+    ...extraModelQueries({ modelsTypes, nameFormatter, logger }, undefined, queries)
   }
 
   return {
     modelsTypes,
-    queries
+    queries,
+    logger,
+    nameFormatter
   }
 }
 

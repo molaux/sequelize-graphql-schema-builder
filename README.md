@@ -257,6 +257,7 @@ sequelizeToGraphQLSchemaBuilder(sequelize, {
   extraModelFields: () => ({}),
   extraModelQueries: () => ({}),
   extraModelTypes: () => ({}),
+  maxManyAssociations: 3,
   debug: false
 })
 ```
@@ -282,6 +283,10 @@ To be documented...
 A callback that lets you add custom types depending on generated Sequelize models types.
 
 To be documented...
+
+### `maxManyAssociations`
+
+Limits the number of "parallel" resulting left joins. Default is 3. 
 
 #### `debug`
 
