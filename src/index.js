@@ -33,14 +33,14 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
   let modelsTypes = {}
   const nameFormatter = nameFormatterFactory(namespace)
   const logger = loggerFactory(debug)
+  const typesNameSet = new Set()
 
   // Generate each model schema and resolver
   for (const modelName in sequelize.models) {
 
-    const formattedModelName = nameFormatter.formatModelName(modelName)
-    
     const model = sequelize.models[modelName]
-
+    //console.log({modelName: model.name})
+    
     // Manage association fileds resolvers
     let associationFields = {}
     for (const associationName in model.associations) {
@@ -78,7 +78,7 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       description: `${modelName} type`,
       fields: () => ({
         ...attributeFields(model),
-        ...extraModelFields({ modelsTypes, nameFormatter }, model),
+        ...extraModelFields({ modelsTypes, nameFormatter, logger }, model),
         ...Object.keys(associationFields).reduce((o, associationField) => {
           o[associationField] = associationFields[associationField]()
           return o
@@ -86,13 +86,24 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       })
     })
 
+    if (typesNameSet.has(modelType.name)) {
+      throw Error(`${model.name} -> modelsTypes already contains a type named ${type.name}`)
+    }
+    typesNameSet.add(modelType.name)
+    
     // keep a trace of models to reuse in associations
     modelsTypes[nameFormatter.formatTypeName(modelName)] = modelType
 
-    modelsTypes = {
-      ...modelsTypes,
-      ...extraModelTypes({ modelsTypes, nameFormatter }, formattedModelName, model)
+    const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, model)
+    
+    for (const extraTypeName in extraTypes) {
+      if (typesNameSet.has(extraTypes[extraTypeName].name)) {
+        throw Error(`extraModelTypes(..., ${model.name}) -> modelsTypes already contains a type named ${extraTypes[extraTypeName].name}`)
+      }
+      modelsTypes[extraTypeName] = extraTypes[extraTypeName]
+      typesNameSet.add(extraTypes[extraTypeName].name)
     }
+
 
     // Root models query
     const manyModelName = nameFormatter.formatManyModelName(modelName)
@@ -128,8 +139,23 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
 
     queries = {
       ...queries,
-      ...extraModelQueries({ modelsTypes, nameFormatter }, formattedModelName, model, queries)
+      ...extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)
     }
+  }
+
+  const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, null)
+
+  for (const extraTypeName in extraTypes) {
+    if (typesNameSet.has(extraTypes[extraTypeName].name)) {
+      throw Error(`extraModelTypes(..., null) -> modelsTypes already contains a type named ${extraTypes[extraTypeName].name}`)
+    }
+    modelsTypes[extraTypeName] = extraTypes[extraTypeName]
+    typesNameSet.add(extraTypes[extraTypeName].name)
+  }
+
+  queries = {
+    ...queries,
+    ...extraModelQueries({ modelsTypes, nameFormatter, logger }, null, queries)
   }
 
   return {

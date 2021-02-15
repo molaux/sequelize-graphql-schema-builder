@@ -11,6 +11,8 @@ graphql-sequelize-r assumes you have graphql and sequelize installed.
 ## Use
 
 ```javascript
+const { sequelizeToGraphQLSchemaBuilder } = require('@molaux/graphql-sequelize-r')
+
 const schema = sequelize => {
   const {
     modelsTypes: sequelizeModelsTypes,
@@ -246,8 +248,9 @@ To be documented
 
 To be documented
 
-## Builder options
+## API
 
+### `sequelizeToGraphQLSchemaBuilder`
 ```javascript
 sequelizeToGraphQLSchemaBuilder(sequelize, { 
   namespace: '',
@@ -258,31 +261,43 @@ sequelizeToGraphQLSchemaBuilder(sequelize, {
 })
 ```
 
-### `namespace`
+#### `namespace`
 
 A prefix for generated queries and types.
 
-### `extraModelFields`
+#### `extraModelFields({ modelsTypes, nameFormatter, logger }, model)`
 
 A callback that lets you add custom fields to Sequelize models types.
 
 To be documented...
 
-### `extraModelQueries`
+#### `extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)`
 
 A callback that lets you add custom queries depending on generated Sequelize models types.
 
 To be documented...
 
-### `extraModelTypes`
+#### `extraModelTypes({ modelsTypes, nameFormatter, logger }, model)`
 
 A callback that lets you add custom types depending on generated Sequelize models types.
 
 To be documented...
 
-### `debug`
+#### `debug`
 
 Prints debug infos. 
+
+### `getRequestedAttributes(model, fieldNode, logger, map)`
+
+To be documented...
+
+### `beforeResolver(model, { nameFormatter, logger })`
+
+To be documented...
+
+### `findOptionsMerger(fo1, fo2)`
+
+To be documented...
 
 ## To do
 
