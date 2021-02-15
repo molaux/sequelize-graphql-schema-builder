@@ -160,7 +160,7 @@ LEFT OUTER JOIN `address` AS `Address`
   
 ORDER BY `Staff`.`staff_id` ASC
 ```
-### Required
+### required
 ```gql
 query {
   staffs {
@@ -204,6 +204,8 @@ query {
 ```
 Here, we juste want films for witch length is in [60, 70], and released in 2006 (there is no other release date in the database);
 
+Operators should formatted in this way : `_${operator}Op` where `operator` is a key from `Sequelize.Op`.
+
 ```gql
 query {
   films(query: { 
@@ -236,109 +238,56 @@ query {
 
 The same request as above, but this time we filter movies having actors named "DEAN".
 
-### order
+#### order
 
-...
+To be documented
 
-### group
+#### group
 
-...
+To be documented
 
-## Authentication
+## Builder options
 
 ```javascript
-const securizeResolver = resolver => (parent, args, { user, ...context }, ...rest) => {
-  if (!user) {
-    throw Error('Unauthenticated')
-  } else {
-    return resolver(parent, args, { user, ...context }, ...rest)
-  }
-}
-
-const securizeAllResolvers = o => {
-  for (const key in o) {
-    if (typeof o[key].resolve === 'function') {
-      o[key].resolve = securizeResolver(o[key].resolve)
-    }
-    if (typeof o[key].subscribe === 'function') {
-      o[key].subscribe = securizeResolver(o[key].subscribe)
-    }
-  }
-  return o
-}
-
-const schema = sequelize => {
-  const {
-    modelsTypes: sequelizeModelsTypes,
-    queries: sequelizeModelsQueries
-  } = sequelizeToGraphQLSchemaBuilder(sequelize)
-
-  return new GraphQLSchema({
-    query: new GraphQLObjectType({
-      name: 'RootQueryType',
-      fields: () => ({
-        ...securizeAllResolvers({
-          ...ormQueries,
-          ...magicQueries({ modelsTypes }),
-          ...dlcQueries({ modelsTypes }),
-          ...remindersQueries(),
-          ...notificationsQueries({ modelsTypes }),
-          ...statisticsQueries(),
-          ...configurationQueries(),
-          ...stockForecastsQueries({ modelsTypes }),
-          ...ediQueries({ modelsTypes })
-        }),
-        version: {
-          type: new GraphQLNonNull(GraphQLString),
-          resolve: () => packageJson.version
-        }
-      })
-    }),
-    subscription: new GraphQLObjectType({
-      name: 'RootSubscriptionType',
-      fields: () => securizeAllResolvers({
-        ...notificationsSubscriptions({ modelsTypes }),
-        ...stockForecastsSubscriptions({ modelsTypes })
-      })
-    }),
-    mutation: new GraphQLObjectType({
-      name: 'RootMutationType',
-      fields: () => ({
-        login: {
-          type: GraphQLString,
-          args: {
-            login: {
-              type: new GraphQLNonNull(GraphQLString)
-            },
-            password: {
-              type: new GraphQLNonNull(GraphQLString)
-            }
-          },
-          resolve: (_, { login: uid, password }, { ldapAuth, req }) =>
-            ldapAuth(uid, password, ['displayName', 'mainGroupCn'])
-              .then(user => {
-                if (!(user.mainGroupCn === 'parents' ||
-                  (user.mainGroupCn === 'hb-users' && req.ip === '81.250.180.245'))) {
-                  throw Error('No credentials')
-                }
-                return user
-              })
-              .then(({ displayName }) => jwt.sign({
-                uid,
-                displayName
-              }, process.env.JWT_SECRET /*, { expiresIn: '1y' } */))
-        },
-        ...securizeAllResolvers({
-          ...remindersMutations(),
-          ...dlcMutations(),
-          ...ticketsMutations(),
-          ...remoteLoggerMutations(),
-          ...inventoryMutations(),
-          ...configurationMutations(),
-          ...stockForecastsMutations()
-        })
-      })
-    })
-  })
-}
+sequelizeToGraphQLSchemaBuilder(sequelize, { 
+  namespace: '',
+  extraModelFields: () => ({}),
+  extraModelQueries: () => ({}),
+  extraModelTypes: () => ({}),
+  debug: false
+})
 ```
+
+### `namespace`
+
+A prefix for generated queries and types.
+
+### `extraModelFields`
+
+A callback that lets you add custom fields to Sequelize models types.
+
+To be documented...
+
+### `extraModelQueries`
+
+A callback that lets you add custom queries depending on generated Sequelize models types.
+
+To be documented...
+
+### `extraModelTypes`
+
+A callback that lets you add custom types depending on generated Sequelize models types.
+
+To be documented...
+
+### `debug`
+
+Prints debug infos. 
+
+## To do
+
+Mutations
+
+## Related project
+
+ * [graphql-sequelize-r-react-admin](https://github.com/molaux/graphql-sequelize-r-react-admin) : a plugin that aims to provide API for [react-admin](https://github.com/marmelab/react-admin)
