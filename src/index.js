@@ -39,7 +39,6 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
   for (const modelName in sequelize.models) {
 
     const model = sequelize.models[modelName]
-    //console.log({modelName: model.name})
     
     // Manage association fileds resolvers
     let associationFields = {}
