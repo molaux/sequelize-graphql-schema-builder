@@ -6,13 +6,13 @@ const pluralize = require('pluralize')
 const util = require('util')
 
 const loggerFactory = active => ({
-  log: active 
+  log: active
     ? (namespace, value) => console.log(namespace, util.inspect(value, false, null, true /* enable colors */))
     : () => null,
-  indent: () => active 
+  indent: () => active
     ? console.group()
     : () => null,
-  outdent: () => active 
+  outdent: () => active
     ? console.groupEnd()
     : () => null
 })
@@ -21,7 +21,7 @@ const nameFormatterFactory = namespace => ({
   namespace,
   modelToFieldMap: new Map(),
   fieldToModelMap: new Map(),
-  namespaceize:  function (name) { return namespace && namespace.length ? `${namespace}_${name}` : name },
+  namespaceize: function (name) { return namespace && namespace.length ? `${namespace}_${name}` : name },
   formatModelName: function (modelName) { return this.namespaceize(modelName[0].toUpperCase() + modelName.substr(1)) },
   formatManyModelName: function (modelName) {
     const formattedModelName = this.formatModelName(modelName)
@@ -31,7 +31,7 @@ const nameFormatterFactory = namespace => ({
   formatModelNameAsField: function (modelName) { return modelName[0].toLowerCase() + modelName.substr(1) },
   formatTypeName: function (type) { return this.formatModelName(type) },
   formatQueryName: function (queryName) { return this.namespaceize(queryName[0].toLowerCase() + queryName.substr(1)) },
-  formatManyQueryName: function (queryName) { 
+  formatManyQueryName: function (queryName) {
     const formattedQueryName = this.formatQueryName(queryName)
     const manyFormattedQueryName = pluralize(formattedQueryName)
     return manyFormattedQueryName === formattedQueryName ? `${formattedQueryName}s` : manyFormattedQueryName
@@ -45,7 +45,6 @@ const nameFormatterFactory = namespace => ({
     } else {
       return this.modelToFieldMap.get(modelName)
     }
-
   },
   fieldToModelName: function (fieldName) {
     if (!this.fieldToModelMap.has(fieldName)) {
@@ -67,15 +66,15 @@ const mapAttributes = (model, { fieldNodes }) => {
 
 const getRequestedAttributes = (model, fieldNode, logger, map) => {
   logger.indent()
-  let attributes = []
-  const fieldMap = map 
+  const attributes = []
+  const fieldMap = map
     ? k => map[k] || k
     : k => k
   const columns = new Set(Object.keys(model.rawAttributes))
 
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
-    for (let field of fieldNode.selectionSet.selections) {
-      let fieldName = fieldMap(field.name.value)
+    for (const field of fieldNode.selectionSet.selections) {
+      const fieldName = fieldMap(field.name.value)
       logger.log('getRequestedAttributes', {
         field,
         fieldName,
@@ -112,7 +111,7 @@ const parseGraphQLArgs = (arg, variables) => {
 
 const getFieldQuery = (model, fieldNode, variables) => {
   let query = null
-  let args = parseGraphQLArgs(fieldNode.arguments, variables)
+  const args = parseGraphQLArgs(fieldNode.arguments, variables)
   if (args.query !== undefined) {
     if (args.query.where !== undefined) {
       query = { where: cleanWhereQuery(model, args.query.where), required: false }
@@ -135,9 +134,9 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
   const attributes = []
   let countManyAssociation = 0
   const _maxManyAssociations = maxManyAssociations || 3 // Prevent multi left joins
-  logger.log('getNestedIncludes', {fieldNode})
+  logger.log('getNestedIncludes', { fieldNode })
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
-    for (let field of fieldNode.selectionSet.selections) {
+    for (const field of fieldNode.selectionSet.selections) {
       const fieldName = nameFormatter.fieldToModelName(field.name.value)
       logger.log('getNestedIncludes', {
         fieldName,
@@ -161,14 +160,14 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
         })
 
         if (model.associations[fieldName].associationType === 'BelongsTo') {
-          const fkName = model.associations[fieldName].options.foreignKey.name 
+          const fkName = model.associations[fieldName].options.foreignKey.name
             ? model.associations[fieldName].options.foreignKey.name
             : model.associations[fieldName].options.foreignKey
 
           logger.log('getNestedIncludes', {
             fieldName,
             type: 'BelongsTo',
-            'model.associations[fieldName].options.foreignKey':fkName
+            'model.associations[fieldName].options.foreignKey': fkName
           })
 
           // Add the missing key
@@ -192,7 +191,7 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
             !attributes.includes(tkName)) {
             attributes.push(tkName)
           } else {
-            for (let pk in model.primaryKeys) {
+            for (const pk in model.primaryKeys) {
               if (!attributes.includes(pk)) {
                 attributes.push(pk)
               }
@@ -200,7 +199,7 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
           }
         }
 
-        let [ nestedIncludes, nestedAttributes ] = getNestedIncludes(model.associations[fieldName].target, field, variables, { nameFormatter, logger, maxManyAssociations })
+        const [nestedIncludes, nestedAttributes] = getNestedIncludes(model.associations[fieldName].target, field, variables, { nameFormatter, logger, maxManyAssociations })
 
         for (const nestedAttribute of nestedAttributes) {
           if (!include.attributes.includes(nestedAttribute)) {
@@ -231,20 +230,19 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
   }
   logger.log('getNestedIncludes : end', {
     includes,
-    attributes 
+    attributes
   })
   logger.outdent()
 
-  return [ includes, attributes ]
+  return [includes, attributes]
 }
 
 const cleanWhereQuery = (model, whereClause, type) => {
-
   if (typeof whereClause === 'object') {
     if (Object.keys(whereClause).length > 1) {
       // Dive into branches
-      for (let key in whereClause) {
-        let newQuery = cleanWhereQuery(model, { [key]: whereClause[key] }, type)
+      for (const key in whereClause) {
+        const newQuery = cleanWhereQuery(model, { [key]: whereClause[key] }, type)
 
         delete whereClause[key]
         whereClause = {
@@ -255,16 +253,16 @@ const cleanWhereQuery = (model, whereClause, type) => {
       return whereClause
     } else if (Object.keys(whereClause).length === 1) {
       // We have only one key in object in sub query
-      let [ key ] = Object.keys(whereClause)
-      let [ value ] = Object.values(whereClause)
+      let [key] = Object.keys(whereClause)
+      let [value] = Object.values(whereClause)
       let finalType = type
 
       // key process
       if (typeof key === 'string') {
         // is it an operator ?
-        let match = key.match(/^_([a-zA-Z]+)Op$/)
+        const match = key.match(/^_([a-zA-Z]+)Op$/)
         if (match) {
-          let op = match[1]
+          const op = match[1]
           if (op !== undefined && op in Sequelize.Op) {
             key = Sequelize.Op[op]
           } else {
@@ -322,9 +320,9 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger, maxMany
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0], logger)
   ]
 
-  const [ nestedIncludes, nestedAttributes ] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger, maxManyAssociations })
+  const [nestedIncludes, nestedAttributes] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger, maxManyAssociations })
 
-  for (let nestedAttribute of nestedAttributes) {
+  for (const nestedAttribute of nestedAttributes) {
     if (!findOptions.attributes.includes(nestedAttribute)) {
       findOptions.attributes.push(nestedAttribute)
     }
@@ -335,19 +333,19 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger, maxMany
     .map(({ name: { value } }) => value)
 
   logger.log('beforeAssociationResolver', {
-    //infos,
+    // infos,
     nestedIncludes,
     requestedAttributes
   })
 
-  findOptions.include = [ ...findOptions.include || [], ...nestedIncludes ]
+  findOptions.include = [...findOptions.include || [], ...nestedIncludes]
 
   logger.log('beforeAssociationResolver', {
-    'findOptions.include': findOptions.include, 
+    'findOptions.include': findOptions.include,
     'findOptions.attributes': findOptions.attributes
   })
 
-  for (let field of requestedAttributes) {
+  for (const field of requestedAttributes) {
     const associationFieldName = nameFormatter.fieldToModelName(field)
     // if requested attribute is an association
     if (targetModel.associations[associationFieldName] !== undefined) {
@@ -377,7 +375,7 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger, maxMany
 const beforeModelResolver = (targetModel, { nameFormatter, logger }) => async (findOptions, { query }, context, infos) => {
   logger.indent()
   logger.log('beforeModelResolver', { targetModelName: targetModel.name })
-  
+
   if (findOptions instanceof Promise) {
     findOptions = await findOptions
   }
@@ -421,17 +419,18 @@ const beforeModelResolver = (targetModel, { nameFormatter, logger }) => async (f
         if (query.group.includes(attribute)) {
           // if attr is grouped against, return as is
           return attribute
-          // Don't auto-agregate fields nested by associations 
+          // Don't auto-agregate fields nested by associations
         } else if (attribute in targetModel.rawAttributes && requestedAttributes.includes(attribute)) {
           const dataType = targetModel.rawAttributes[attribute].type
           if (dataType instanceof DataTypes.DECIMAL) {
             return [targetModel.sequelize.fn('SUM', targetModel.sequelize.col(attribute)), attribute]
           } else if (dataType instanceof DataTypes.DATE || dataType instanceof DataTypes.DATEONLY) {
             return [targetModel.sequelize.fn('MAX', targetModel.sequelize.col(attribute)), attribute]
-          } { // TODO: add more aggregations types
+          } else { // TODO: add more aggregations types
             return [targetModel.sequelize.fn('AVG', targetModel.sequelize.col(attribute)), attribute]
           }
         }
+        throw new Error('group attr inconsitancy, should not happen')
       })
 
       findOptions.group = Array.isArray(query.group[0])
@@ -452,7 +451,7 @@ const beforeModelResolver = (targetModel, { nameFormatter, logger }) => async (f
     }
 
     logger.log('beforeModelResolver', { query })
-    
+
     // Manage the limit clause
     if (query.limit !== undefined) {
       findOptions.limit = query.limit
@@ -460,7 +459,7 @@ const beforeModelResolver = (targetModel, { nameFormatter, logger }) => async (f
     }
   }
   logger.log('beforeModelResolver end', {
-    targetModelName: targetModel.name, 
+    targetModelName: targetModel.name,
     findOptionsInclude: findOptions.include,
     findOptionsAttributes: findOptions.attributes
   })

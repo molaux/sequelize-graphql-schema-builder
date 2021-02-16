@@ -30,24 +30,23 @@ typeMapper.mapType((type) => {
 
 const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelFields, extraModelQueries, extraModelTypes, debug, maxManyAssociations }) => {
   let queries = {}
-  let modelsTypes = {}
+  const modelsTypes = {}
   const nameFormatter = nameFormatterFactory(namespace)
   const logger = loggerFactory(debug)
   const typesNameSet = new Set()
 
   // Generate each model schema and resolver
   for (const modelName in sequelize.models) {
-
     const model = sequelize.models[modelName]
-    
+
     // Manage association fileds resolvers
-    let associationFields = {}
+    const associationFields = {}
     for (const associationName in model.associations) {
       const association = model.associations[associationName]
       // Add assotiation fields to request and get it post computed to avoid circular dependance
       const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
       const fieldName = nameFormatter.modelToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
-      
+
       logger.log('sequelizeToGraphQLSchemaBuilder', {
         modelName: model.name,
         associationType: association.associationType,
@@ -72,7 +71,7 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
     // Add to base model type : its own field and association fields as post computable fields
     // to avoid circular dependances
 
-    let modelType = new GraphQLObjectType({
+    const modelType = new GraphQLObjectType({
       name: nameFormatter.formatTypeName(modelName),
       description: `${modelName} type`,
       fields: () => ({
@@ -86,15 +85,15 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
     })
 
     if (typesNameSet.has(modelType.name)) {
-      throw Error(`${model.name} -> modelsTypes already contains a type named ${type.name}`)
+      throw Error(`${model.name} -> modelsTypes already contains a type named ${modelType.name}`)
     }
     typesNameSet.add(modelType.name)
-    
+
     // keep a trace of models to reuse in associations
     modelsTypes[nameFormatter.formatTypeName(modelName)] = modelType
 
     const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, model)
-    
+
     for (const extraTypeName in extraTypes) {
       if (typesNameSet.has(extraTypes[extraTypeName].name)) {
         throw Error(`extraModelTypes(..., ${model.name}) -> modelsTypes already contains a type named ${extraTypes[extraTypeName].name}`)
@@ -102,7 +101,6 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       modelsTypes[extraTypeName] = extraTypes[extraTypeName]
       typesNameSet.add(extraTypes[extraTypeName].name)
     }
-
 
     // Root models query
     const manyQueryName = nameFormatter.formatManyQueryName(modelName)
@@ -119,15 +117,15 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
             manyQueryName,
             attributes
           })
-          
+
           const findOptions = await beforeResolver(model, { nameFormatter, logger, maxManyAssociations })({
             ...otherFindOptions,
             attributes: getRequestedAttributes(model, infos.fieldNodes[0], logger)
           }, args, ctx, infos, ...rest)
-          
-          logger.log('root query resolver', { 
+
+          logger.log('root query resolver', {
             manyQueryName,
-            finalFindOptionsAttributes: findOptions.attributes, 
+            finalFindOptionsAttributes: findOptions.attributes,
             finalFindOptionsInclude: findOptions.include
           })
 
