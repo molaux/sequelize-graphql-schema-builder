@@ -128,7 +128,7 @@ const getFieldQuery = (model, fieldNode, variables) => {
   return query
 }
 
-const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
+const getNestedIncludes = (model, infos, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
   logger.indent()
   const includes = []
   const attributes = []
@@ -136,7 +136,38 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
   const _maxManyAssociations = maxManyAssociations || 3 // Prevent multi left joins
   logger.log('getNestedIncludes', { fieldNode })
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
+    // is there fragments in that selectionSet ?
+    const resolvedSelections = fieldNode.selectionSet.selections
     for (const field of fieldNode.selectionSet.selections) {
+      // Resolve fragments selection
+      if (field.kind === 'FragmentSpread') {
+        const fragmentName = field.name.value
+        const fragment = infos.fragments[fragmentName]
+
+        logger.log('getNestedIncludes', {
+          isFragment: true,
+          fragmentName,
+          fragment
+        })
+
+        if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
+          resolvedSelections.push(...fragment.selectionSet.selections)
+        }
+      }
+    }
+
+    for (const field of resolvedSelections) {
+      if (field.kind === 'FragmentSpread') {
+        const fragmentName = field.name.value
+        const fragment = infos.fragments[fragmentName]
+
+        logger.log('getNestedIncludes', {
+          isFragment: true,
+          fragmentName,
+          fragment
+        })
+      }
+
       const fieldName = nameFormatter.fieldToModelName(field.name.value)
       logger.log('getNestedIncludes', {
         fieldName,
@@ -199,7 +230,7 @@ const getNestedIncludes = (model, fieldNode, variables, { nameFormatter, logger,
           }
         }
 
-        const [nestedIncludes, nestedAttributes] = getNestedIncludes(model.associations[fieldName].target, field, variables, { nameFormatter, logger, maxManyAssociations })
+        const [nestedIncludes, nestedAttributes] = getNestedIncludes(model.associations[fieldName].target, infos, field, variables, { nameFormatter, logger, maxManyAssociations })
 
         for (const nestedAttribute of nestedAttributes) {
           if (!include.attributes.includes(nestedAttribute)) {
@@ -320,7 +351,7 @@ const beforeAssociationResolver = (targetModel, { nameFormatter, logger, maxMany
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0], logger)
   ]
 
-  const [nestedIncludes, nestedAttributes] = getNestedIncludes(targetModel, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger, maxManyAssociations })
+  const [nestedIncludes, nestedAttributes] = getNestedIncludes(targetModel, infos, infos.fieldNodes[0], infos.variableValues, { nameFormatter, logger, maxManyAssociations })
 
   for (const nestedAttribute of nestedAttributes) {
     if (!findOptions.attributes.includes(nestedAttribute)) {
