@@ -10,7 +10,7 @@
     "graphql",
     "sequelize"
   ],
-  "author": "Marc-Olivier Laux",
+  "author": "Marc-Olivier Laux <marc-olivier@matlaux.net> (https://github.com/molaux)",
   "license": "MIT",
   "dependencies": {
     "deepmerge": "^4.2.2",
