@@ -4,6 +4,8 @@ const DataTypes = require('sequelize/lib/data-types')
 const deepmerge = require('deepmerge')
 const pluralize = require('pluralize')
 const util = require('util')
+const { attributeFields } = require('graphql-sequelize')
+const { GraphQLNonNull } = require('graphql')
 
 const loggerFactory = active => ({
   log: active
@@ -30,9 +32,11 @@ const nameFormatterFactory = namespace => ({
   },
   formatModelNameAsField: function (modelName) { return modelName[0].toLowerCase() + modelName.substr(1) },
   formatTypeName: function (type) { return this.formatModelName(type) },
-  formatQueryName: function (queryName) { return this.namespaceize(queryName[0].toLowerCase() + queryName.substr(1)) },
-  formatManyQueryName: function (queryName) {
-    const formattedQueryName = this.formatQueryName(queryName)
+  formatInputTypeName: function (type) { return `${this.formatModelName(type)}Input` },
+  formatQueryName: function (modelName) { return this.namespaceize(modelName[0].toLowerCase() + modelName.substr(1)) },
+  formatInsertMutationName: function (modelName) { return `insert${modelName}` },
+  formatManyQueryName: function (modelName) {
+    const formattedQueryName = this.formatQueryName(modelName)
     const manyFormattedQueryName = pluralize(formattedQueryName)
     return manyFormattedQueryName === formattedQueryName ? `${formattedQueryName}s` : manyFormattedQueryName
   },
@@ -62,6 +66,28 @@ const mapAttributes = (model, { fieldNodes }) => {
 
   // filter the attributes against the columns
   return requestedAttributes.filter(attribute => columns.has(attribute))
+}
+
+const attributeInputFields = (model, { cache: typesCache }) => {
+  const attributes = attributeFields(model, { cache: typesCache })
+  for (const attribute in attributes) {
+    if ((model.rawAttributes[attribute].autoIncrement === true ||
+      model.rawAttributes[attribute].defaultValue !== undefined ||
+      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name))) &&
+      (attributes[attribute].type instanceof GraphQLNonNull)) {
+      attributes[attribute].type = attributes[attribute].type.ofType
+    }
+  }
+  return attributes
+}
+
+const getPrimaryKeyType = (model, cache) => {
+  for (const attribute in model.rawAttributes) {
+    if (model.rawAttributes[attribute].primaryKey === true) {
+      return attributeFields(model, { cache, include: [attribute] })[attribute].type
+    }
+  }
+  throw Error(`Primary key not found for ${model.name}`)
 }
 
 const getRequestedAttributes = (model, fieldNode, logger, map) => {
@@ -526,6 +552,8 @@ const findOptionsMerger = (fo1, fo2) => {
 }
 
 module.exports = {
+  getPrimaryKeyType,
+  attributeInputFields,
   loggerFactory,
   nameFormatterFactory,
   mapAttributes,

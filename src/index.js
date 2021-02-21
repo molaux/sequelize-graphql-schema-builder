@@ -1,5 +1,6 @@
 'use strict'
 const {
+  GraphQLInputObjectType,
   GraphQLObjectType,
   GraphQLString,
   GraphQLBoolean,
@@ -16,20 +17,30 @@ const {
   getRequestedAttributes,
   loggerFactory,
   nameFormatterFactory,
-  findOptionsMerger
+  findOptionsMerger,
+  attributeInputFields,
+  getPrimaryKeyType
 } = require('./lib/utils.js')
 
 typeMapper.mapType((type) => {
-  // map bools as strings
   if (type instanceof DataTypes.BLOB) {
     return GraphQLString
   }
-  // use default for everything else
   return false
 })
 
-const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelFields, extraModelQueries, extraModelTypes, debug, maxManyAssociations }) => {
+const sequelizeToGraphQLSchemaBuilder = (sequelize, {
+  namespace = '',
+  extraModelFields = () => ({}),
+  extraModelQueries = () => ({}),
+  extraModelTypes = () => ({}),
+  debug = false,
+  maxManyAssociations = 3,
+  extraModelMutations = () => ({})
+}) => {
   let queries = {}
+  let mutations = {}
+  const typesCache = {}
   const modelsTypes = {}
   const nameFormatter = nameFormatterFactory(namespace)
   const logger = loggerFactory(debug)
@@ -75,7 +86,7 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       name: nameFormatter.formatTypeName(modelName),
       description: `${modelName} type`,
       fields: () => ({
-        ...attributeFields(model),
+        ...attributeFields(model, { cache: typesCache }),
         ...extraModelFields({ modelsTypes, nameFormatter, logger }, model),
         ...Object.keys(associationFields).reduce((o, associationField) => {
           o[associationField] = associationFields[associationField]()
@@ -84,13 +95,32 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       })
     })
 
+    const modelInputType = new GraphQLInputObjectType({
+      name: nameFormatter.formatInputTypeName(modelName),
+      description: `${modelName} input type`,
+      fields: () => ({
+        ...attributeInputFields(model, { cache: typesCache })
+        // ...extraModelFields({ modelsTypes, nameFormatter, logger }, model)
+        // ...Object.keys(associationFields).reduce((o, associationField) => {
+        //   o[associationField] = associationFields[associationField]()
+        //   return o
+        // }, {})
+      })
+    })
+
     if (typesNameSet.has(modelType.name)) {
       throw Error(`${model.name} -> modelsTypes already contains a type named ${modelType.name}`)
     }
     typesNameSet.add(modelType.name)
 
+    if (typesNameSet.has(modelInputType.name)) {
+      throw Error(`${model.name} -> modelsTypes already contains an input type named ${modelInputType.name}`)
+    }
+    typesNameSet.add(modelInputType.name)
+
     // keep a trace of models to reuse in associations
     modelsTypes[nameFormatter.formatTypeName(modelName)] = modelType
+    modelsTypes[nameFormatter.formatInputTypeName(modelName)] = modelInputType
 
     const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, model)
 
@@ -134,9 +164,25 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
       })
     }
 
+    const insertMutationName = nameFormatter.formatInsertMutationName(modelName)
+    mutations[insertMutationName] = {
+      type: modelType,
+      args: {
+        input: { type: modelInputType }
+      },
+      resolve: (parent, { input }) => {
+        return model.create(input)
+      }
+    }
+
     queries = {
       ...queries,
       ...extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)
+    }
+
+    mutations = {
+      ...mutations,
+      ...extraModelMutations({ modelsTypes, nameFormatter, logger }, model, mutations)
     }
   }
 
@@ -155,9 +201,15 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, { namespace, extraModelField
     ...extraModelQueries({ modelsTypes, nameFormatter, logger }, undefined, queries)
   }
 
+  mutations = {
+    ...mutations,
+    ...extraModelMutations({ modelsTypes, nameFormatter, logger }, undefined, mutations)
+  }
+
   return {
     modelsTypes,
     queries,
+    mutations,
     logger,
     nameFormatter
   }
