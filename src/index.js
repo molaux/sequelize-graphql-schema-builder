@@ -4,7 +4,9 @@ const {
   GraphQLObjectType,
   GraphQLString,
   GraphQLBoolean,
-  GraphQLList
+  GraphQLList,
+  GraphQLInt,
+  GraphQLNonNull
 } = require('graphql')
 
 const { GraphQLJSON } = require('graphql-type-json')
@@ -19,7 +21,9 @@ const {
   nameFormatterFactory,
   findOptionsMerger,
   attributeInputFields,
-  getPrimaryKeyType
+  attributeUpdateFields,
+  getNestedInputIncludes,
+  cleanWhereQuery
 } = require('./lib/utils.js')
 
 typeMapper.mapType((type) => {
@@ -95,17 +99,37 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, {
       })
     })
 
-    const modelInputType = new GraphQLInputObjectType({
-      name: nameFormatter.formatInputTypeName(modelName),
-      description: `${modelName} input type`,
-      fields: () => ({
-        ...attributeInputFields(model, { cache: typesCache })
-        // ...extraModelFields({ modelsTypes, nameFormatter, logger }, model)
-        // ...Object.keys(associationFields).reduce((o, associationField) => {
-        //   o[associationField] = associationFields[associationField]()
-        //   return o
-        // }, {})
+    // Input types
+    const associationInputFields = {}
+    for (const associationName in model.associations) {
+      const association = model.associations[associationName]
+      const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
+      const fieldName = nameFormatter.modelToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
+
+      associationInputFields[fieldName] = () => ({
+        type: isMany
+          ? new GraphQLList(modelsTypes[nameFormatter.formatInsertInputTypeName(association.target.name)])
+          : modelsTypes[nameFormatter.formatInsertInputTypeName(association.target.name)]
       })
+    }
+
+    const modelInsertInputType = new GraphQLInputObjectType({
+      name: nameFormatter.formatInsertInputTypeName(modelName),
+      description: `${modelName} insert input type`,
+      fields: () => ({
+        ...attributeInputFields(model, { cache: typesCache, nameFormatter }),
+        // ...extraModelFields({ modelsTypes, nameFormatter, logger }, model)
+        ...Object.keys(associationInputFields).reduce((o, associationField) => {
+          o[associationField] = associationInputFields[associationField]()
+          return o
+        }, {})
+      })
+    })
+
+    const modelUpdateInputType = new GraphQLInputObjectType({
+      name: nameFormatter.formatUpdateInputTypeName(modelName),
+      description: `${modelName} update input type`,
+      fields: () => attributeUpdateFields(model, { cache: typesCache })
     })
 
     if (typesNameSet.has(modelType.name)) {
@@ -113,14 +137,20 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, {
     }
     typesNameSet.add(modelType.name)
 
-    if (typesNameSet.has(modelInputType.name)) {
-      throw Error(`${model.name} -> modelsTypes already contains an input type named ${modelInputType.name}`)
+    if (typesNameSet.has(modelInsertInputType.name)) {
+      throw Error(`${model.name} -> modelsTypes already contains an input type named ${modelInsertInputType.name}`)
     }
-    typesNameSet.add(modelInputType.name)
+    typesNameSet.add(modelInsertInputType.name)
+
+    if (typesNameSet.has(modelUpdateInputType.name)) {
+      throw Error(`${model.name} -> modelsTypes already contains an input type named ${modelUpdateInputType.name}`)
+    }
+    typesNameSet.add(modelUpdateInputType.name)
 
     // keep a trace of models to reuse in associations
     modelsTypes[nameFormatter.formatTypeName(modelName)] = modelType
-    modelsTypes[nameFormatter.formatInputTypeName(modelName)] = modelInputType
+    modelsTypes[nameFormatter.formatInsertInputTypeName(modelName)] = modelInsertInputType
+    modelsTypes[nameFormatter.formatUpdateInputTypeName(modelName)] = modelUpdateInputType
 
     const extraTypes = extraModelTypes({ modelsTypes, nameFormatter, logger }, model)
 
@@ -168,10 +198,49 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, {
     mutations[insertMutationName] = {
       type: modelType,
       args: {
-        input: { type: modelInputType }
+        input: { type: modelInsertInputType }
       },
       resolve: (parent, { input }) => {
-        return model.create(input)
+        // return model.create(input)
+        const [sequelizeInput, include] = getNestedInputIncludes(input, model, modelInsertInputType, nameFormatter)
+        return model.create(sequelizeInput, { include })
+      }
+    }
+
+    const deleteMutationName = nameFormatter.formatDeleteMutationName(modelName)
+    mutations[deleteMutationName] = {
+      type: new GraphQLNonNull(GraphQLInt),
+      args: {
+        query: { type: GraphQLJSON }
+      },
+      resolve: (parent, { query }) => {
+        if (!query.where) {
+          throw Error('You must define a where clause when deleting')
+        }
+        return model.destroy({ where: cleanWhereQuery(model, query.where) })
+      }
+    }
+
+    const updateMutationName = nameFormatter.formatUpdateMutationName(modelName)
+    mutations[updateMutationName] = {
+      type: new GraphQLNonNull(GraphQLInt),
+      args: {
+        query: { type: GraphQLJSON },
+        input: { type: modelUpdateInputType }
+      },
+      resolve: async (parent, { query, input }) => {
+        if (!query.where) {
+          throw Error('You must define a where clause when updating')
+        }
+        let count = 0
+        for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where) })) {
+          for (const field in input) {
+            instance[field] = input[field]
+          }
+          instance.save()
+          count += 1
+        }
+        return count
       }
     }
 

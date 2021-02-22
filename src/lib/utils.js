@@ -5,7 +5,7 @@ const deepmerge = require('deepmerge')
 const pluralize = require('pluralize')
 const util = require('util')
 const { attributeFields } = require('graphql-sequelize')
-const { GraphQLNonNull } = require('graphql')
+const { GraphQLNonNull, GraphQLList } = require('graphql')
 
 const loggerFactory = active => ({
   log: active
@@ -32,9 +32,12 @@ const nameFormatterFactory = namespace => ({
   },
   formatModelNameAsField: function (modelName) { return modelName[0].toLowerCase() + modelName.substr(1) },
   formatTypeName: function (type) { return this.formatModelName(type) },
-  formatInputTypeName: function (type) { return `${this.formatModelName(type)}Input` },
+  formatInsertInputTypeName: function (type) { return `${this.formatModelName(type)}InsertInput` },
+  formatUpdateInputTypeName: function (type) { return `${this.formatModelName(type)}UpdateInput` },
   formatQueryName: function (modelName) { return this.namespaceize(modelName[0].toLowerCase() + modelName.substr(1)) },
   formatInsertMutationName: function (modelName) { return `insert${modelName}` },
+  formatDeleteMutationName: function (modelName) { return `delete${modelName}` },
+  formatUpdateMutationName: function (modelName) { return `update${modelName}` },
   formatManyQueryName: function (modelName) {
     const formattedQueryName = this.formatQueryName(modelName)
     const manyFormattedQueryName = pluralize(formattedQueryName)
@@ -68,17 +71,95 @@ const mapAttributes = (model, { fieldNodes }) => {
   return requestedAttributes.filter(attribute => columns.has(attribute))
 }
 
-const attributeInputFields = (model, { cache: typesCache }) => {
+const attributeInputFields = (model, { cache: typesCache, nameFormatter }) => {
   const attributes = attributeFields(model, { cache: typesCache })
+  const associationsFk = new Set(Object.values(model.associations)
+    .filter(({ associationType }) => associationType === 'BelongsTo')
+    .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
+
   for (const attribute in attributes) {
     if ((model.rawAttributes[attribute].autoIncrement === true ||
       model.rawAttributes[attribute].defaultValue !== undefined ||
-      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name))) &&
+      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name)) ||
+      associationsFk.has(attribute)) &&
       (attributes[attribute].type instanceof GraphQLNonNull)) {
       attributes[attribute].type = attributes[attribute].type.ofType
     }
   }
   return attributes
+}
+
+const attributeUpdateFields = (model, { cache }) => {
+  const attributes = attributeFields(model, { cache })
+  for (const attribute in attributes) {
+    if (attributes[attribute].type instanceof GraphQLNonNull) {
+      attributes[attribute].type = attributes[attribute].type.ofType
+    }
+  }
+  return attributes
+}
+
+const getNestedInputIncludes = (input, model, inputType, nameFormatter) => {
+  const sequelizeInput = {}
+  const includes = []
+  for (const key in input) {
+    const modelName = nameFormatter.fieldToModelName(key)
+    if (modelName in model.associations) {
+      if (inputType.getFields()[key].type instanceof GraphQLList) {
+        if (!Array.isArray(input[key])) {
+          throw Error(`${model.name} -> ${modelName} should be an array`)
+        }
+        sequelizeInput[modelName] = []
+        const mergedNestedIncludes = []
+        for (const inputItem of input[key]) {
+          const [nestedSequelizeInput, nestedIncludes] = getNestedInputIncludes(
+            inputItem,
+            model.associations[modelName].target,
+            inputType.getFields()[key].type.ofType,
+            nameFormatter
+          )
+          sequelizeInput[modelName].push(nestedSequelizeInput)
+          if (!nestedIncludes
+            .filter(({ association: nestedAssociation }) => mergedNestedIncludes
+              .filter(({ association }) => association === nestedAssociation).length)
+            .length) {
+            mergedNestedIncludes.push(...nestedIncludes)
+          }
+        }
+
+        if (!mergedNestedIncludes
+          .filter(({ association: nestedAssociation }) => includes
+            .filter(({ association }) => association === nestedAssociation).length)
+          .length) {
+          includes.push(({
+            association: model.associations[modelName],
+            include: mergedNestedIncludes
+          }))
+        }
+      } else {
+        const [nestedSequelizeInput, nestedIncludes] = getNestedInputIncludes(
+          input[key],
+          model.associations[modelName].target,
+          inputType.getFields()[key].type,
+          nameFormatter
+        )
+        sequelizeInput[modelName] = nestedSequelizeInput
+        includes.push({
+          association: model.associations[modelName]
+        })
+
+        if (nestedIncludes.length && !nestedIncludes
+          .filter(({ association: nestedAssociation }) => includes
+            .filter(({ association }) => association === nestedAssociation).length)
+          .length) {
+          includes.push(nestedIncludes)
+        }
+      }
+    } else {
+      sequelizeInput[key] = input[key]
+    }
+  }
+  return [sequelizeInput, includes]
 }
 
 const getPrimaryKeyType = (model, cache) => {
@@ -553,7 +634,9 @@ const findOptionsMerger = (fo1, fo2) => {
 
 module.exports = {
   getPrimaryKeyType,
+  getNestedInputIncludes,
   attributeInputFields,
+  attributeUpdateFields,
   loggerFactory,
   nameFormatterFactory,
   mapAttributes,

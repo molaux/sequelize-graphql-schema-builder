@@ -1,6 +1,8 @@
 # Graphql Sequelize R
 
 This project is an experimental work that aims to bring relations and miscellaneous features on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
+
+The `sequelizeToGraphQLSchemaBuilder` builds queries, mutations and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and insertions are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
   
 ## Installation
 
@@ -53,7 +55,7 @@ query {
     store { 
       manager {
       	firstName
-    	}
+      }
       staffs {
         firstName
       }
@@ -248,6 +250,215 @@ To be documented
 
 To be documented
 
+## Mutations
+
+### insert
+
+Multiple insertions at one time :
+
+```gql
+mutation {
+  insertFilm(input: {
+    title: "Interstellar"
+    language: {
+    	name: "Spanish"
+  	}
+    originalLanguageId: 1
+    filmCategories: [
+      {
+        categoryId: 14
+      }
+      {
+        category: {
+          name: "Adventure"
+        }
+      }
+    ]
+  }) {
+    filmId
+    filmCategories {
+      category {
+        categoryId
+      }
+    }
+    language {
+      languageId
+    }
+    original {
+      languageId
+    }
+  }
+}
+```
+
+Here we used an existing `Language` (english with id `1`) and associated it as the original language. For the movie language, we introduced a new "spanish" language. The same is true for categories : we use existing "Sci-fi" (id `14`) category and introduced a new "Adventure" `Category`.
+
+The new ids are pulled in the response :
+
+```json
+{
+  "data": {
+    "insertFilm": {
+      "filmId": 3,
+      "filmCategories": [
+        {
+          "category": {
+            "categoryId": 5
+          }
+        },
+        {
+          "category": {
+            "categoryId": 6
+          }
+        }
+      ],
+      "language": {
+        "languageId": 5
+      },
+      "original": {
+        "languageId": 6
+      }
+    }
+  }
+}
+```
+
+Check :
+
+```gql
+query {
+  films {
+    title
+    filmCategories(required: true) {
+      category(query: { where: { name: "Adventure" } }, required: true) {
+        categoryId
+      }
+    }
+  }
+}
+```
+
+Result :
+
+```json
+{
+  "data": {
+    "films": [
+      {
+        "title": "Interstellar",
+        "filmCategories": [
+          {
+            "category": {
+              "categoryId": 17
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+### update
+
+```gql
+mutation {
+  updateFilm(query: { where: { filmId: 1001 } }, input: {
+		releaseYear: 2014
+  })
+}
+```
+
+The resolver returns the amount of modified items :
+
+```json
+{
+  "data": {
+    "updateFilm": 1
+  }
+}
+```
+
+### delete
+
+```gql
+mutation {
+  deleteFilmCategory(query: { where: { filmId: 1001 } })
+}
+```
+
+The resolver returns the amount of deleted items :
+
+```json
+"data": {
+  "deleteFilmCategory": 2
+}
+```
+
+## Types
+
+For each model, several types are created :
+
+### Model type
+
+This type is used for queries.
+
+```gql
+type Address {
+  addressId: Int!
+  address: String!
+  address2: String
+  district: String!
+  postalCode: String
+  phone: String!
+  lastUpdate: Date!
+  cityId: Int!
+  customers(query: JSON, required: Boolean): [Customer]
+  staffs(query: JSON, required: Boolean): [Staff]
+  stores(query: JSON, required: Boolean): [Store]
+  city(query: JSON, required: Boolean): City
+}
+```
+
+### Insert input type
+
+This type is used for insert mutations. Autoincremented fields becomes nullable, as for timestamp fields.
+
+Note that in `Address` model, cityId cannot be `null`, but here it is nullable bexause you can either pass an existing `cityId` or a nested new `city` to be created at the same time. A `GraphQLUnionInput` should be pertinent here, but it is not yet implemented.
+
+```gql
+input AddressInsertInput {
+  addressId: Int
+  address: String!
+  address2: String
+  district: String!
+  postalCode: String
+  phone: String!
+  lastUpdate: Date
+  cityId: Int
+  customers: [CustomerInsertInput]
+  staffs: [StaffInsertInput]
+  stores: [StoreInsertInput]
+  city: CityInsertInput
+}
+```
+
+### Update input type
+
+Here, there is no more association and non nullable fields becomes nullable, so each field is optionnal (we lose the type information here : if we pass `null` to `cityId`, it will result in a constraint error). 
+
+```gql
+input AddressUpdateInput {
+  addressId: Int
+  address: String
+  address2: String
+  district: String
+  postalCode: String
+  phone: String
+  lastUpdate: Date
+  cityId: Int
+}
+```
+
 ## API
 
 ### `sequelizeToGraphQLSchemaBuilder`
@@ -303,10 +514,6 @@ To be documented...
 ### `findOptionsMerger(fo1, fo2)`
 
 To be documented...
-
-## To do
-
-Mutations
 
 ## Related project
 
