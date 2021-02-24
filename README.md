@@ -299,24 +299,24 @@ The new ids are pulled in the response :
 {
   "data": {
     "insertFilm": {
-      "filmId": 3,
+      "filmId": 1001,
       "filmCategories": [
         {
           "category": {
-            "categoryId": 5
+            "categoryId": 14
           }
         },
         {
           "category": {
-            "categoryId": 6
+            "categoryId": 17
           }
         }
       ],
       "language": {
-        "languageId": 5
+        "languageId": 7
       },
       "original": {
-        "languageId": 6
+        "languageId": 1
       }
     }
   }
