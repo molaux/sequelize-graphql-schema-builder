@@ -6,7 +6,8 @@ const {
   GraphQLBoolean,
   GraphQLList,
   GraphQLInt,
-  GraphQLNonNull
+  GraphQLNonNull,
+  GraphQLID
 } = require('graphql')
 
 const { GraphQLJSON } = require('graphql-type-json')
@@ -86,12 +87,24 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, {
 
     // Add to base model type : its own field and association fields as post computable fields
     // to avoid circular dependances
-
+    const rawFields = attributeFields(model, { cache: typesCache })
+    console.log(model.primaryKeys)
+    const associationsFk = new Set(Object.values(model.associations)
+      .filter(({ associationType }) => associationType === 'BelongsTo')
+      .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
+    for (const field in rawFields) {
+      console.log(field)
+      if (model.rawAttributes[field].primaryKey || associationsFk.has(field))
+      rawFields[field].type = rawFields[field].type instanceof GraphQLNonNull
+        ? new GraphQLNonNull(GraphQLID)
+        : GraphQLID
+    }
+  
     const modelType = new GraphQLObjectType({
       name: nameFormatter.formatTypeName(modelName),
       description: `${modelName} type`,
       fields: () => ({
-        ...attributeFields(model, { cache: typesCache }),
+        ...rawFields,
         ...extraModelFields({ modelsTypes, nameFormatter, logger }, model),
         ...Object.keys(associationFields).reduce((o, associationField) => {
           o[associationField] = associationFields[associationField]()

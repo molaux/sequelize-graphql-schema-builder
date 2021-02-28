@@ -5,7 +5,7 @@ const deepmerge = require('deepmerge')
 const pluralize = require('pluralize')
 const util = require('util')
 const { attributeFields } = require('graphql-sequelize')
-const { GraphQLNonNull, GraphQLList } = require('graphql')
+const { GraphQLNonNull, GraphQLList, GraphQLID } = require('graphql')
 
 const loggerFactory = active => ({
   log: active
@@ -78,10 +78,17 @@ const attributeInputFields = (model, { cache: typesCache, nameFormatter }) => {
     .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
 
   for (const attribute in attributes) {
-    if ((model.rawAttributes[attribute].autoIncrement === true ||
+    const isID = model.rawAttributes[attribute].primaryKey || associationsFk.has(attribute)
+    const isNullable = model.rawAttributes[attribute].autoIncrement === true ||
       model.rawAttributes[attribute].defaultValue !== undefined ||
       (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name)) ||
-      associationsFk.has(attribute)) &&
+      associationsFk.has(attribute)
+    
+    if (isID) {
+      attributes[attribute].type = isNullable 
+        ? GraphQLID
+        : new GraphQLNonNull(GraphQLID)
+    } else if (isNullable &&
       (attributes[attribute].type instanceof GraphQLNonNull)) {
       attributes[attribute].type = attributes[attribute].type.ofType
     }
@@ -91,8 +98,15 @@ const attributeInputFields = (model, { cache: typesCache, nameFormatter }) => {
 
 const attributeUpdateFields = (model, { cache }) => {
   const attributes = attributeFields(model, { cache })
+  const associationsFk = new Set(Object.values(model.associations)
+    .filter(({ associationType }) => associationType === 'BelongsTo')
+    .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
+
   for (const attribute in attributes) {
-    if (attributes[attribute].type instanceof GraphQLNonNull) {
+    const isID = model.rawAttributes[attribute].primaryKey || associationsFk.has(attribute)
+    if (isID) {
+      attributes[attribute].type = GraphQLID
+    } else if (attributes[attribute].type instanceof GraphQLNonNull) {
       attributes[attribute].type = attributes[attribute].type.ofType
     }
   }
