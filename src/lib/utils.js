@@ -23,7 +23,7 @@ const nameFormatterFactory = namespace => ({
   namespace,
   modelToFieldMap: new Map(),
   fieldToModelMap: new Map(),
-  namespaceize: function (name) { return namespace && namespace.length ? `${namespace}_${name}` : name },
+  namespaceize: function (name) { return this.namespace && this.namespace.length ? `${this.namespace}${name}` : name },
   formatModelName: function (modelName) { return this.namespaceize(modelName[0].toUpperCase() + modelName.substr(1)) },
   formatManyModelName: function (modelName) {
     const formattedModelName = this.formatModelName(modelName)
@@ -35,9 +35,9 @@ const nameFormatterFactory = namespace => ({
   formatInsertInputTypeName: function (type) { return `${this.formatModelName(type)}InsertInput` },
   formatUpdateInputTypeName: function (type) { return `${this.formatModelName(type)}UpdateInput` },
   formatQueryName: function (modelName) { return this.namespaceize(modelName[0].toLowerCase() + modelName.substr(1)) },
-  formatInsertMutationName: function (modelName) { return `insert${modelName}` },
-  formatDeleteMutationName: function (modelName) { return `delete${modelName}` },
-  formatUpdateMutationName: function (modelName) { return `update${modelName}` },
+  formatInsertMutationName: function (modelName) { return `insert${this.formatModelName(modelName)}` },
+  formatDeleteMutationName: function (modelName) { return `delete${this.formatModelName(modelName)}` },
+  formatUpdateMutationName: function (modelName) { return `update${this.formatModelName(modelName)}` },
   formatManyQueryName: function (modelName) {
     const formattedQueryName = this.formatQueryName(modelName)
     const manyFormattedQueryName = pluralize(formattedQueryName)

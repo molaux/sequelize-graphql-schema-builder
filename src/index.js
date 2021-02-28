@@ -40,13 +40,14 @@ const sequelizeToGraphQLSchemaBuilder = (sequelize, {
   extraModelTypes = () => ({}),
   debug = false,
   maxManyAssociations = 3,
-  extraModelMutations = () => ({})
+  extraModelMutations = () => ({}),
+  nameFormatter = null
 }) => {
   let queries = {}
   let mutations = {}
   const typesCache = {}
   const modelsTypes = {}
-  const nameFormatter = nameFormatterFactory(namespace)
+  nameFormatter = nameFormatter ?? nameFormatterFactory(namespace)
   const logger = loggerFactory(debug)
   const typesNameSet = new Set()
 
