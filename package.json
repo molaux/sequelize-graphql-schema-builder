@@ -1,7 +1,7 @@
 {
   "name": "@molaux/sequelize-graphql-schema-builder",
-  "version": "2.0.0-alpha.6",
-  "description": "Builds a complete GraphQL Schema from a sequelize instance",
+  "version": "2.0.0-alpha.7",
+  "description": "Builds a complete GraphQL Schema for CRUD operations from a sequelize instance",
   "tags": [
     "sequelize",
     "graphql",

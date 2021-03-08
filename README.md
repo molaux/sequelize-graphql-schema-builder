@@ -534,19 +534,19 @@ The only exception is obviously for `belongsToMany` associations removal that ca
 ```gql
 mutation {
   updateFilm(query: { where: { filmId: 1011 } }, input: {
-    title: "Interstellar3"
+    title: "Other title"
     Language: {
-    	name: "brazilian"
+    	name: "Portuguese"
   	}
     OriginalLanguage: {
       languageId: 2
     }
     Categories: [
       {
-        name: "My OTHER cat"
+        name: "New topic"
       }
       {
-        name: "hard Adventure"
+        name: "Other topic"
       }
       {
         categoryId: 10
