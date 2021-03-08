@@ -1,0 +1,44 @@
+const { GraphQLUnionInputTypeBuilder } = require('./GraphQLUnionInputType')
+const { InputModelIDTypeFactory } = require('./InputModelIDType')
+const MODEL_ID = 'model_id'
+const MODEL_TYPE = 'model_type'
+
+const inputModelAssociationDiscriminator = (fields, fk) => {
+  if (Object.keys(fields).length === 1 && Object.keys(fields)[0] === fk) {
+    return MODEL_ID
+  } else {
+    return MODEL_TYPE
+  }
+}
+
+class InputModelAssociationType {
+  constructor (association, ModelInputType) {
+    const realFk = Object.keys(association.target.primaryKeys)[0]
+    if (!InputModelAssociationType.register) {
+      InputModelAssociationType.register = {}
+    }
+    const name = `Input${association.target.name}AssociationBy${realFk[0].toLocaleUpperCase() + realFk.slice(1)}`
+    if (!InputModelAssociationType.register[name]) {
+      InputModelAssociationType.register[name] = new GraphQLUnionInputTypeBuilder({
+        name,
+        resolveTypeFromAst: (ast) => {
+          if (ModelInputType === undefined) {
+            throw Error(`Model input type has not been defined (association name: ${association.target.name})`)
+          }
+          switch (inputModelAssociationDiscriminator(ast.fields.reduce((fields, { name: { value } }) => ({ ...fields, [value]: true }), {}), realFk)) {
+            case MODEL_ID: return new InputModelIDTypeFactory(association)
+            default: return ModelInputType
+          }
+        }
+      })
+    }
+    return InputModelAssociationType.register[name]
+  }
+}
+
+module.exports = {
+  InputModelAssociationType,
+  inputModelAssociationDiscriminator,
+  MODEL_ID,
+  MODEL_TYPE
+}

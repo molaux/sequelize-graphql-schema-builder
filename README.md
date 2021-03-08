@@ -1,26 +1,27 @@
-# Graphql Sequelize R
+# Sequelize GraphQL Schema Builder
 
-This project is an experimental work that aims to bring relations and miscellaneous features on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
+This project is an experimental work that aims to a complete GraphQL schema on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
 
-The `sequelizeToGraphQLSchemaBuilder` builds queries, mutations and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and insertions are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
+The `sequelizeGraphQLSchemaBuilder` builds queries, mutations and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and mutations are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
   
 ## Installation
 
-$ npm install --save @molaux/graphql-sequelize-r
-
-graphql-sequelize-r assumes you have graphql and sequelize installed.
+``` bash
+$ npm install --save @molaux/sequelize-graphql-schema-builder
+```
+`sequelize-graphql-schema-builder` assumes you have graphql and sequelize installed.
 
 ## Use
 
 ```javascript
-const { sequelizeToGraphQLSchemaBuilder } = require('@molaux/graphql-sequelize-r')
+const { schemaBuilder } = require('@molaux/sequelize-graphql-schema-builder')
 
 const schema = sequelize => {
   const {
     modelsTypes: sequelizeModelsTypes,
     queries: sequelizeModelsQueries,
-    // TODO: mutations: sequelizeModelsMutations
-  } = sequelizeToGraphQLSchemaBuilder(sequelize)
+    mutations: sequelizeModelsMutations
+  } = schemaBuilder(sequelize)
 
   return new GraphQLSchema({
     query: new GraphQLObjectType({
@@ -41,31 +42,31 @@ const schema = sequelize => {
 
 ## GraphQL API
 
-This documentation is based on the [GraphQL Sequelize R example](https://github.com/molaux/graphql-sequelize-r-example).
+This documentation is based on the [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder).
 
 ### Introduction
 
-The api will shape like this :
+The query api will shape like this :
 
 ```gql
 query {
-  staffs {
+  Staffs {
     firstName
     fullName
-    store { 
-      manager {
+    Store { 
+      ManagerStaff {
       	firstName
       }
-      staffs {
+      Staffs {
         firstName
       }
     }
-    asManagerStores { 
-      staffs {
+    ManagerStaffStores { 
+      Staffs {
         fullName
       }
     }
-    address {
+    Address {
       address
     }
   }
@@ -75,39 +76,56 @@ query {
 ```json
 {
   "data": {
-    "staffs": [
+    "Staffs": [
       {
         "firstName": "Mike",
         "fullName": "Mike HILLYER",
-        "store": null,
-        "asManagerStores": [],
-        "address": {
+        "Store": {
+          "ManagerStaff": {
+            "firstName": "Mike"
+          },
+          "Staffs": [
+            {
+              "firstName": "Mike"
+            }
+          ]
+        },
+        "ManagerStaffStores": [
+          {
+            "Staffs": [
+              {
+                "fullName": "Mike HILLYER"
+              }
+            ]
+          }
+        ],
+        "Address": {
           "address": "23 Workhaven Lane"
         }
       },
       {
         "firstName": "Jon",
         "fullName": "Jon STEPHENS",
-        "store": {
-          "manager": {
+        "Store": {
+          "ManagerStaff": {
             "firstName": "Jon"
           },
-          "staffs": [
+          "Staffs": [
             {
               "firstName": "Jon"
             }
           ]
         },
-        "asManagerStores": [
+        "ManagerStaffStores": [
           {
-            "staffs": [
+            "Staffs": [
               {
                 "fullName": "Jon STEPHENS"
               }
             ]
           }
         ],
-        "address": {
+        "Address": {
           "address": "1411 Lillydale Drive"
         }
       }
@@ -118,73 +136,154 @@ query {
 
 Note the nested associations : here `Store` and `Staff` are linked by 2 foreign keys. 
 
-[In the example](https://github.com/molaux/graphql-sequelize-r-example/tree/master/src/models/sakila/extensions/Staff.cjs), `Staff.firstName` has a getter that transforms raw data into upper case, and `Staff.fullName` is a `Sequelize` `VIRTUAL` field.
+[In the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/master/src/models/sakila/extensions/Staff.cjs), `Staff.firstName` has a getter that transforms raw data into upper case, and `Staff.fullName` is a `Sequelize` `VIRTUAL` field.
 
 The corresponding SQL query is composed of multiple joins, and only needed fields to respond to the GraphQL query are pulled (and those needed by JOINs and VIRTUAL fields)
 
 ```sql
 SELECT 
-  `Staff`.`first_name` AS `firstName`,
-  `Staff`.`store_id` AS `storeId`,
-  `Staff`.`staff_id` AS `staffId`,
-  `Staff`.`address_id` AS `addressId`,
-  `Staff`.`last_name` AS `lastName`,
-  `Store`.`manager_staff_id` AS `Store.managerStaffId`,
-  `Store`.`store_id` AS `Store.storeId`,
-  `Store->Manager`.`staff_id` AS `Store.Manager.staffId`,
-  `Store->Manager`.`first_name` AS `Store.Manager.firstName`,
-  `Store->Staffs`.`staff_id` AS `Store.Staffs.staffId`,
-  `Store->Staffs`.`first_name` AS `Store.Staffs.firstName`,
-  `AsManagerStore`.`store_id` AS `AsManagerStore.storeId`,
-  `AsManagerStore->Staffs`.`staff_id` AS `AsManagerStore.Staffs.staffId`,
-  `AsManagerStore->Staffs`.`first_name` AS `AsManagerStore.Staffs.firstName`,
-  `AsManagerStore->Staffs`.`last_name` AS `AsManagerStore.Staffs.lastName`,
-  `Address`.`address_id` AS `Address.addressId`, 
-  `Address`.`address` AS `Address.address`
-
-FROM `staff` AS `Staff`
-
-LEFT OUTER JOIN `store` AS `Store`
-  ON `Staff`.`store_id` = `Store`.`store_id` 
-
-LEFT OUTER JOIN `staff` AS `Store->Manager`
-  ON `Store`.`manager_staff_id` = `Store->Manager`.`staff_id`
-
-LEFT OUTER JOIN `staff` AS `Store->Staffs`
-  ON `Store`.`store_id` = `Store->Staffs`.`store_id`
-
-LEFT OUTER JOIN `store` AS `AsManagerStore`
-  ON `Staff`.`staff_id` = `AsManagerStore`.`manager_staff_id`
- 
-LEFT OUTER JOIN `staff` AS `AsManagerStore->Staffs`
-  ON `AsManagerStore`.`store_id` = `AsManagerStore->Staffs`.`store_id`
-
-LEFT OUTER JOIN `address` AS `Address`
-  ON `Staff`.`address_id` = `Address`.`address_id`
-  
-ORDER BY `Staff`.`staff_id` ASC
+  "Staff"."first_name" AS "firstName",
+  "Staff"."store_id" AS "storeId",
+  "Staff"."staff_id" AS "staffId",
+  "Staff"."address_id" AS "addressId",
+  "Staff"."last_name" AS "lastName",
+  "Store"."manager_staff_id" AS "Store.managerStaffId",
+  "Store"."store_id" AS "Store.storeId",
+  "Store->ManagerStaff"."staff_id" AS "Store.ManagerStaff.staffId",
+  "Store->ManagerStaff"."first_name" AS "Store.ManagerStaff.firstName",
+  "Store->Staffs"."staff_id" AS "Store.Staffs.staffId",
+  "Store->Staffs"."first_name" AS "Store.Staffs.firstName",
+  "ManagerStaffStores"."store_id" AS "ManagerStaffStores.storeId", "ManagerStaffStores->Staffs"."staff_id" AS "ManagerStaffStores.Staffs.staffId",
+  "ManagerStaffStores->Staffs"."first_name" AS "ManagerStaffStores.Staffs.firstName",
+  "ManagerStaffStores->Staffs"."last_name" AS "ManagerStaffStores.Staffs.lastName",
+  "Address"."address_id" AS "Address.addressId", "Address"."address" AS "Address.address"
+FROM "staff" AS "Staff"
+LEFT OUTER JOIN "store" AS "Store" ON "Staff"."store_id" = "Store"."store_id"
+LEFT OUTER JOIN "staff" AS "Store->ManagerStaff" ON "Store"."manager_staff_id" = "Store->ManagerStaff"."staff_id"
+LEFT OUTER JOIN "staff" AS "Store->Staffs" ON "Store"."store_id" = "Store->Staffs"."store_id"
+LEFT OUTER JOIN "store" AS "ManagerStaffStores" ON "Staff"."staff_id" = "ManagerStaffStores"."manager_staff_id"
+LEFT OUTER JOIN "staff" AS "ManagerStaffStores->Staffs" ON "ManagerStaffStores"."store_id" = "ManagerStaffStores->Staffs"."store_id"
+LEFT OUTER JOIN "address" AS "Address" ON "Staff"."address_id" = "Address"."address_id"
+ORDER BY "Staff"."staff_id" ASC
 ```
-### required
+
+### optimized
+The previous big join query can be slitted where you want with the optionnal argument `optimized` (default is `true`) :
+
 ```gql
 query {
-  staffs {
+  Staffs {
+    firstName
     fullName
-    store(required: true) { 
-      manager {
+    Store(optimized: false) { 
+      ManagerStaff {
       	firstName
-    	}
+      }
+      Staffs {
+        firstName
+      }
+    }
+    ManagerStaffStores { 
+      Staffs {
+        fullName
+      }
+    }
+    Address {
+      address
+    }
+  }
+}
+```
+
+The resolvers will split association trees so the resulting queries will look like this :
+
+```sql
+SELECT 
+  "Staff"."first_name" AS "firstName",
+  "Staff"."staff_id" AS "staffId",
+  ...
+FROM "staff" AS "Staff"
+LEFT OUTER JOIN "store" AS "ManagerStaffStores" ON "Staff"."staff_id" = "ManagerStaffStores"."manager_staff_id"
+LEFT OUTER JOIN "staff" AS "ManagerStaffStores->Staffs" ON "ManagerStaffStores"."store_id" = "ManagerStaffStores->Staffs"."store_id"
+LEFT OUTER JOIN "address" AS "Address" ON "Staff"."address_id" = "Address"."address_id"
+ORDER BY "Staff"."staff_id" ASC;
+
+SELECT 
+  "Store"."manager_staff_id" AS "managerStaffId",
+  "Store"."store_id" AS "storeId",
+  "ManagerStaff"."staff_id" AS "ManagerStaff.staffId", "ManagerStaff"."first_name" AS "ManagerStaff.firstName", "Staffs"."staff_id" AS "Staffs.staffId", "Staffs"."first_name" AS "Staffs.firstName"
+FROM "store" AS "Store"
+LEFT OUTER JOIN "staff" AS "ManagerStaff" ON "Store"."manager_staff_id" = "ManagerStaff"."staff_id"
+LEFT OUTER JOIN "staff" AS "Staffs" ON "Store"."store_id" = "Staffs"."store_id"
+WHERE "Store"."store_id" = 1;
+
+SELECT 
+  "Store"."manager_staff_id" AS "managerStaffId",
+  "Store"."store_id" AS "storeId",
+  "ManagerStaff"."staff_id" AS "ManagerStaff.staffId", "ManagerStaff"."first_name" AS "ManagerStaff.firstName", "Staffs"."staff_id" AS "Staffs.staffId", "Staffs"."first_name" AS "Staffs.firstName"
+FROM "store" AS "Store"
+LEFT OUTER JOIN "staff" AS "ManagerStaff" ON "Store"."manager_staff_id" = "ManagerStaff"."staff_id"
+LEFT OUTER JOIN "staff" AS "Staffs" ON "Store"."store_id" = "Staffs"."store_id"
+WHERE "Store"."store_id" = 2;
+```
+
+The 2 `Staff` instances resulting from the first request resolve their `Store` seperatly.
+
+### required
+
+Lets say we haved nullized "Mike HILLYER" `store_id` in the database.
+
+```gql
+query {
+  Staffs {
+    fullName
+    Store(query: { required: true }) {
+      storeId
     }
   }
 }
 ```
 This time, "Mike HILLYER" is excluded, since he has no `Store`.
 
+Note that this is not compatible with the `optimized`: `false` option on the same node since the required is passed to the `include` dependencies tree of the root requested element by Sequelize.
+
 ### query
 
-#### where
+For each model, a corresponding type is created :
+```gql
+type Film {
+  filmId: ID!
+  title: String!
+  description: String
+  releaseYear: Int
+  rentalDuration: Int!
+  rentalRate: String!
+  length: Int
+  replacementCost: String!
+  rating: FilmratingEnumType
+  specialFeatures: String
+  lastUpdate: Date!
+  languageId: ID!
+  originalLanguageId: ID
+  Inventories(query: JSON, optimized: Boolean): [Inventory]
+  Language(query: JSON, optimized: Boolean): Language
+  OriginalLanguage(query: JSON, optimized: Boolean): Language
+  Actors(query: JSON, optimized: Boolean): [Actor]
+  Categories(query: JSON, optimized: Boolean): [Category]
+}
+```
+
+#### query
+
+```gql
+Films(query: JSON, optimized: Boolean): [Film]
+```
+
+Note: the `optimized` option on the root query has currently no effect.
+
 ```gql
 query {
-  films(query: { 
+  Films(query: { 
     where: {
       length: {
         _andOp: { 
@@ -198,21 +297,19 @@ query {
     length
     title
     releaseYear
-    filmActors {
-      actor {
-      	lastName
-      }
+    Actors {
+      lastName
     }
   }
 }
 ```
 Here, we juste want films for witch length is in [60, 70], and released in 2006 (there is no other release date in the database);
 
-Operators should formatted in this way : `_${operator}Op` where `operator` is a key from `Sequelize.Op`.
+Operators should be formatted this way : `_${operator}Op` where `operator` is a key from `Sequelize.Op`.
 
 ```gql
 query {
-  films(query: { 
+  Films(query: { 
     where: {
       length: {
         _andOp: { 
@@ -226,25 +323,53 @@ query {
     length
     title
     releaseYear
-    filmActors(required: true) {
-      actor (required: true, query: {
-        where: {
-          lastName: "DEAN"
-        }
-      }) {
-      	firstName
-        lastName
+    Actors(query: {
+      required: true
+      where: {
+        lastName: "DEAN"
       }
+    }) {
+      firstName
+      lastName
     }
   }
 }
 ```
 
-The same request as above, but this time we filter movies having actors named "DEAN".
+The same request as above, but this time we filtered movies having actors named "DEAN".
 
-#### order
+#### order, offset, limit
 
-To be documented
+```gql
+query {
+  Films(query: { 
+    where: {
+      length: {
+        _andOp: { 
+          _gteOp: 60,
+          _lteOp: 70,
+        }
+      },
+      releaseYear: 2006
+    }
+    limit: 3
+    offset: 0
+    order: [[ "length", "DESC" ], [ "title", "DESC" ]]
+  }) {
+    length
+    title
+    releaseYear
+    Inventories(query: {
+      limit: 3
+    	offset: 0
+    }) { 
+      inventoryId
+    }
+  }
+}
+```
+
+The `limit` and `offset` options are supported in nested elements but be warned that the Sequelize `separate` flag is automatically setted in association. (See [Sequelize documentation](https://sequelize.org/master/class/lib/model.js~Model.html#static-method-findAll)).
 
 #### group
 
@@ -252,128 +377,193 @@ To be documented
 
 ## Mutations
 
-### insert
+For input types, when possible, a fake `GraphQLUnionInputType` is used. It can be resolved either by a node embedding only its primary key (refering to an existing one), or any else that will be considered as a creation type :
 
-Multiple insertions at one time :
+```gql
+input FilmCreateInput {
+  filmId: ID
+  title: String!
+  description: String
+  releaseYear: Int
+  rentalDuration: Int
+  rentalRate: String
+  length: Int
+  replacementCost: String
+  rating: FilmratingEnumType
+  specialFeatures: String
+  lastUpdate: Date
+  languageId: ID
+  originalLanguageId: ID
+  Inventories: [InputInventoryAssociationByInventoryId]
+  Language: InputLanguageAssociationByLanguageId
+  OriginalLanguage: InputLanguageAssociationByLanguageId
+  Actors: [InputActorAssociationByActorId]
+  Categories: [InputCategoryAssociationByCategoryId]
+}
+
+input InputFilmByFilmId {
+  filmId: ID
+}
+
+scalar InputFilmAssociationByFilmId
+```
+
+`InputFilmAssociationByFilmId` can be a `FilmCreateInput` (an new film) or a `InputFilmByFilmId` (an existing film)
+
+### create
+
+```gql
+createFilm(input: FilmCreateInput): Film
+```
 
 ```gql
 mutation {
-  insertFilm(input: {
+  createFilm(input: {
     title: "Interstellar"
-    language: {
-    	name: "Spanish"
+    // a new language
+    Language: { 
+    	name: "Breton" 
   	}
-    originalLanguageId: 1
-    filmCategories: [
+    // an existing language
+    OriginalLanguage: { 
+      languageId: 2
+    }
+    Categories: [
+      // a new Category
+      { 
+        name: "New category"
+      }
+      // an existing Category
       {
         categoryId: 14
       }
-      {
-        category: {
-          name: "Adventure"
-        }
+      // a new Category
+      { 
+        name: "Other category"
+        // we can create other nested creations / associations as well
       }
     ]
   }) {
     filmId
-    filmCategories {
-      category {
-        categoryId
-      }
+    Categories {
+      categoryId
+      name
     }
-    language {
+    Language {
       languageId
     }
-    original {
+    OriginalLanguage {
       languageId
     }
   }
 }
 ```
-
-Here we used an existing `Language` (english with id `1`) and associated it as the original language. For the movie language, we introduced a new "spanish" language. The same is true for categories : we use existing "Sci-fi" (id `14`) category and introduced a new "Adventure" `Category`.
 
 The new ids are pulled in the response :
 
 ```json
 {
   "data": {
-    "insertFilm": {
+    "createFilm": {
       "filmId": 1001,
-      "filmCategories": [
+      "Categories": [
         {
-          "category": {
-            "categoryId": 14
-          }
+          "categoryId": "14",
+          "name": "Sci-Fi"
         },
         {
-          "category": {
-            "categoryId": 17
-          }
+          "categoryId": "149",
+          "name": "New category"
+        },
+        {
+          "categoryId": "150",
+          "name": "Other category"
         }
       ],
-      "language": {
-        "languageId": 7
+      "Language": {
+        "languageId": 10
       },
-      "original": {
-        "languageId": 1
+      "OriginalLanguage": {
+        "languageId": 2
       }
     }
   }
 }
 ```
 
-Check :
-
-```gql
-query {
-  films {
-    title
-    filmCategories(required: true) {
-      category(query: { where: { name: "Adventure" } }, required: true) {
-        categoryId
-      }
-    }
-  }
-}
-```
-
-Result :
-
-```json
-{
-  "data": {
-    "films": [
-      {
-        "title": "Interstellar",
-        "filmCategories": [
-          {
-            "category": {
-              "categoryId": 17
-            }
-          }
-        ]
-      }
-    ]
-  }
-}
-```
 ### update
+
+Update is a little bit different since we can omit any field to update only those needed, and wee need a query to select entities we want to apply mutation on.
+
+Consequently non nullable fields have to become nullable.
+
+```gql 
+input FilmUpdateInput {
+  filmId: ID
+  title: String
+  description: String
+  releaseYear: Int
+  rentalDuration: Int
+  rentalRate: String
+  length: Int
+  replacementCost: String
+  rating: FilmratingEnumType
+  specialFeatures: String
+  lastUpdate: Date
+  languageId: ID
+  originalLanguageId: ID
+  Inventories: [InputInventoryAssociationByInventoryId]
+  addInventories: [InputInventoryAssociationByInventoryId]
+  Language: InputLanguageAssociationByLanguageId
+  OriginalLanguage: InputLanguageAssociationByLanguageId
+  Actors: [InputActorAssociationByActorId]
+  addActors: [InputActorAssociationByActorId]
+  removeActors: [InputActorByActorId]
+  Categories: [InputCategoryAssociationByCategoryId]
+  addCategories: [InputCategoryAssociationByCategoryId]
+  removeCategories: [InputCategoryByCategoryId]
+}
+
+updateFilm(query: JSON, input: FilmUpdateInput): [Film]
+```
+
+We can see that all associations are union types, so you can create new entities or refer to existing one.
+
+The only exception is obviously for `belongsToMany` associations removal that can only refer to existing models (here: `removeCategories: [InputCategoryByCategoryId]`).
 
 ```gql
 mutation {
-  updateFilm(query: { where: { filmId: 1001 } }, input: {
-		releaseYear: 2014
-  })
-}
-```
-
-The resolver returns the amount of modified items :
-
-```json
-{
-  "data": {
-    "updateFilm": 1
+  updateFilm(query: { where: { filmId: 1011 } }, input: {
+    title: "Interstellar3"
+    Language: {
+    	name: "brazilian"
+  	}
+    OriginalLanguage: {
+      languageId: 2
+    }
+    Categories: [
+      {
+        name: "My OTHER cat"
+      }
+      {
+        name: "hard Adventure"
+      }
+      {
+        categoryId: 10
+      }
+    ]
+  }) {
+    filmId
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+    }
+    OriginalLanguage {
+      languageId
+    }
   }
 }
 ```
@@ -381,81 +571,14 @@ The resolver returns the amount of modified items :
 ### delete
 
 ```gql
+  deleteFilm(query: JSON): [Film]
+```
+
+```gql
 mutation {
-  deleteFilmCategory(query: { where: { filmId: 1001 } })
-}
-```
-
-The resolver returns the amount of deleted items :
-
-```json
-"data": {
-  "deleteFilmCategory": 2
-}
-```
-
-## Types
-
-For each model, several types are created :
-
-### Model type
-
-This type is used for queries.
-
-```gql
-type Address {
-  addressId: Int!
-  address: String!
-  address2: String
-  district: String!
-  postalCode: String
-  phone: String!
-  lastUpdate: Date!
-  cityId: Int!
-  customers(query: JSON, required: Boolean): [Customer]
-  staffs(query: JSON, required: Boolean): [Staff]
-  stores(query: JSON, required: Boolean): [Store]
-  city(query: JSON, required: Boolean): City
-}
-```
-
-### Insert input type
-
-This type is used for insert mutations. Autoincremented fields becomes nullable, as for timestamp fields.
-
-Note that in `Address` model, cityId cannot be `null`, but here it is nullable bexause you can either pass an existing `cityId` or a nested new `city` to be created at the same time. A `GraphQLUnionInput` should be pertinent here, but it is not yet implemented.
-
-```gql
-input AddressInsertInput {
-  addressId: Int
-  address: String!
-  address2: String
-  district: String!
-  postalCode: String
-  phone: String!
-  lastUpdate: Date
-  cityId: Int
-  customers: [CustomerInsertInput]
-  staffs: [StaffInsertInput]
-  stores: [StoreInsertInput]
-  city: CityInsertInput
-}
-```
-
-### Update input type
-
-Here, there is no more association and non nullable fields becomes nullable, so each field is optionnal (we lose the type information here : if we pass `null` to `cityId`, it will result in a constraint error). 
-
-```gql
-input AddressUpdateInput {
-  addressId: Int
-  address: String
-  address2: String
-  district: String
-  postalCode: String
-  phone: String
-  lastUpdate: Date
-  cityId: Int
+  deleteFilm(query: { where: { filmId: 1001 } }) {
+    filmId
+  }
 }
 ```
 
@@ -514,7 +637,3 @@ To be documented...
 ### `findOptionsMerger(fo1, fo2)`
 
 To be documented...
-
-## Related project
-
- * [graphql-sequelize-r-react-admin](https://github.com/molaux/graphql-sequelize-r-react-admin) : a plugin that aims to provide API for [react-admin](https://github.com/marmelab/react-admin)
