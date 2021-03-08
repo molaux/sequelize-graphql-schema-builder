@@ -42,7 +42,7 @@ const schema = sequelize => {
 
 ## GraphQL API
 
-This documentation is based on the [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder).
+This documentation is based on the [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder-example).
 
 ### Introduction
 
