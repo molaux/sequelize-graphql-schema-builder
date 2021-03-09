@@ -2,7 +2,7 @@
 
 This project is an experimental work that aims to build a complete GraphQL schema for CRUD operations, on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
 
-The `sequelizeGraphQLSchemaBuilder` builds queries, mutations and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and mutations are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
+The `sequelizeGraphQLSchemaBuilder` builds queries, mutations, subscriptions and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and mutations are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
   
 ## Installation
 
@@ -20,7 +20,8 @@ const schema = sequelize => {
   const {
     modelsTypes: sequelizeModelsTypes,
     queries: sequelizeModelsQueries,
-    mutations: sequelizeModelsMutations
+    mutations: sequelizeModelsMutations,
+    subscriptions: sequelizeModelsSubscriptions
   } = schemaBuilder(sequelize)
 
   return new GraphQLSchema({
@@ -30,7 +31,7 @@ const schema = sequelize => {
     }),
     subscription: new GraphQLObjectType({
       name: 'RootSubscriptionType',
-      fields: () => {} // Your subscriptions here
+      fields: () => sequelizeModelsSubscriptions
     }),
     mutation: new GraphQLObjectType({
       name: 'RootMutationType',
@@ -582,6 +583,31 @@ mutation {
 }
 ```
 
+## Subscriptions
+
+The builder creates three subscriptions for each model :
+
+```gql
+type RootSubscriptionType {
+  createdCountry: [Country]
+  updatedCountry: [Country]
+  deletedCountry: [CountryID]
+}
+
+# Country ID type
+type CountryID {
+  countryId: ID
+}
+```
+
+The `CountryID` type is the `Country` type, reduced to the only field we are sure to know after deletion : the primary key.
+
+For subscriptions to work, you must [provide a `pubSub`](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/subscriptions/src/server.js) entry to the GraphQL context.
+
+Warning : the `created...` subscriptions does not yet handle bulk created objects !
+
+See the [`subscriptions` branch of the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/subscriptions) for testing purpose.
+
 ## API
 
 ### `schemaBuilder`
@@ -604,7 +630,7 @@ A prefix for generated queries and types.
 
 A callback that lets you add custom fields to Sequelize models types. It will be called each time a GraphQL model type is built. The resulting object will be merged with model's GraphQL type fields.
 
-[In this simple example (it's in the `extra-fields` branch)](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/master/src/models/sakila/extensions/Staff.cjs), we use this hook to inject rich country infos coming from [restcountries.eu](https://restcountries.eu) to our `Country` GraphQL type. 
+[In this simple example (it's in the `extra-fields` branch)](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/extra-fields/src/schema/country/index.js), we use this hook to inject rich country infos coming from [restcountries.eu](https://restcountries.eu) to our `Country` GraphQL type. 
 
 ```gql
 type Country {

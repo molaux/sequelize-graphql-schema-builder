@@ -1,0 +1,62 @@
+
+subscription {
+  deletedCountry {
+    countryId
+  }
+}
+
+subscription {
+  createdCountry {
+    countryId
+    country
+    lastUpdate
+  }
+}
+
+subscription {
+  updatedCountry {
+    countryId
+    country
+    lastUpdate
+  }
+}
+
+mutation {
+  createCountry(input: {
+    country: "Jamaica"
+  }) {
+    countryId
+    country
+  }
+}
+
+mutation {
+  createCountry(input: {
+    country: "Brazil"
+  }) {
+    countryId
+    country
+  }
+}
+
+mutation {
+  deleteCountry(query: {
+    where: {
+      countryId: {
+        _inOp: [ 110, 111 ]
+      }
+    }
+  }) {
+    countryId
+    country
+  }
+}
+
+mutation {
+  updateCountry(
+    input: { country: "Patagonia" },
+    query: { where: { countryId: 112 } }) {
+      country
+    }
+}
+

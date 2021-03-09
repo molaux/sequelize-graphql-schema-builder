@@ -39,7 +39,10 @@ const nameFormatterFactory = namespace => ({
       return fieldName
     }
     return this.fieldToModelMap.get(fieldName)
-  }
+  },
+  formatCreatedSubscriptionName: function (modelName) { return `created${this.formatModelName(modelName)}` },
+  formatUpdatedSubscriptionName: function (modelName) { return `updated${this.formatModelName(modelName)}` },
+  formatDeletedSubscriptionName: function (modelName) { return `deleted${this.formatModelName(modelName)}` }
 })
 
 module.exports = {

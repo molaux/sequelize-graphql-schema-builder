@@ -9,6 +9,8 @@ const {
   GraphQLID
 } = require('graphql')
 
+const { withFilter } = require('graphql-subscriptions')
+
 const { GraphQLJSON } = require('graphql-type-json')
 const { attributeFields, resolver, typeMapper } = require('graphql-sequelize')
 const pluralize = require('pluralize')
@@ -78,6 +80,7 @@ const schemaBuilder = (sequelize, options) => {
 
   let queries = {}
   let mutations = {}
+  const subscriptions = {}
   const typesCache = {}
   const modelsTypes = {}
   const nameFormatter = defaultNameFormatter ?? nameFormatterFactory(namespace)
@@ -144,6 +147,16 @@ const schemaBuilder = (sequelize, options) => {
           o[associationField] = associationFields[associationField]()
           return o
         }, {})
+      })
+    })
+
+    const modelIDType = new GraphQLObjectType({
+      name: `${nameFormatter.formatTypeName(modelName)}ID`,
+      description: `${modelName} ID type`,
+      fields: () => ({
+        [model.primaryKeyAttribute]: {
+          type: GraphQLID
+        }
       })
     })
 
@@ -244,7 +257,8 @@ const schemaBuilder = (sequelize, options) => {
           logger.log('manyResolver', {
             manyQueryName,
             finalFindOptionsAttributes: findOptions.attributes,
-            finalFindOptionsInclude: findOptions.include
+            finalFindOptionsInclude: findOptions.include,
+            finalFindOptionsWhere: findOptions.where
           })
           return findOptions
         }
@@ -273,11 +287,13 @@ const schemaBuilder = (sequelize, options) => {
       args: {
         query: { type: GraphQLJSON }
       },
-      resolve: async (parent, { query }, ...rest) => {
+      resolve: async (parent, { query }, { pubSub, ...ctx }, ...rest) => {
         if (!query.where) {
           throw Error('You must define a where clause when deleting')
         }
-        const models = await manyResolver(parent, { query }, ...rest)
+        const models = await manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
+        pubSub?.publish('modelsDeleted', models)
+
         model.destroy({ where: cleanWhereQuery(model, query.where) })
         return models
       }
@@ -289,9 +305,12 @@ const schemaBuilder = (sequelize, options) => {
       args: {
         input: { type: modelInsertInputType }
       },
-      resolve: async (parent, { input }, ...rest) => {
+      resolve: async (parent, { input }, { pubSub, ...ctx }, ...rest) => {
         const { sequelizeInput, includes: include, foreignHooks } = getNestedInputs(input, model, modelInsertInputType, { nameFormatter, logger })
         const createdModel = await model.create(sequelizeInput, { include })
+
+        pubSub?.publish('modelsCreated', [createdModel])
+
         await Promise.all(foreignHooks.map(hook => hook(createdModel)))
         return manyResolver(parent, {
           query: {
@@ -299,7 +318,7 @@ const schemaBuilder = (sequelize, options) => {
               [model.primaryKeyAttribute]: createdModel[model.primaryKeyAttribute]
             }
           }
-        }, ...rest)
+        }, { pubSub, ...ctx }, ...rest)
       }
     }
 
@@ -310,7 +329,7 @@ const schemaBuilder = (sequelize, options) => {
         query: { type: GraphQLJSON },
         input: { type: modelUpdateInputType }
       },
-      resolve: async (parent, { query, input }, ...rest) => {
+      resolve: async (parent, { query, input }, { pubSub, ...ctx }, ...rest) => {
         if (!query.where) {
           throw Error('You must define a where clause when updating')
         }
@@ -419,11 +438,62 @@ const schemaBuilder = (sequelize, options) => {
           models.push(instance)
         }
 
-        await Promise.all(models)
+        await Promise.all(models.map(instance => instance.save()))
         await Promise.all(hooks.map(hook => hook()))
 
-        return manyResolver(parent, { query }, ...rest)
+        pubSub?.publish('modelsUpdated', models)
+
+        return manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
       }
+    }
+
+    const instancesResolver = (models, args, ...rest) => {
+      if (models.length) {
+        const [instance] = models
+        return manyResolver(
+          null,
+          {
+            query: {
+              where: {
+                [instance.constructor.primaryKeyAttribute]: {
+                  _inOp: models.map(model => model[model.constructor.primaryKeyAttribute])
+                }
+              }
+            }
+          },
+          ...rest)
+      } else {
+        return []
+      }
+    }
+
+    const subscribeToModelInstances = (action) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
+      () => pubSub.asyncIterator(action),
+      (models) => models.reduce(
+        (dontFilter, { constructor: { name, primaryKeyAttribute } }) => dontFilter && name === model.name,
+        true
+      )
+    )(payload, args, { pubSub, ...ctx }, ...rest)
+
+    const createdModelSubscriptionName = nameFormatter.formatCreatedSubscriptionName(modelName)
+    subscriptions[createdModelSubscriptionName] = {
+      type: new GraphQLList(modelType),
+      subscribe: subscribeToModelInstances('modelsCreated'),
+      resolve: instancesResolver
+    }
+
+    const updatedModelSubscriptionName = nameFormatter.formatUpdatedSubscriptionName(modelName)
+    subscriptions[updatedModelSubscriptionName] = {
+      type: new GraphQLList(modelType),
+      subscribe: subscribeToModelInstances('modelsUpdated'),
+      resolve: instancesResolver
+    }
+
+    const deletedModelSubscriptionName = nameFormatter.formatDeletedSubscriptionName(modelName)
+    subscriptions[deletedModelSubscriptionName] = {
+      type: new GraphQLList(modelIDType),
+      subscribe: subscribeToModelInstances('modelsDeleted'),
+      resolve: (models) => models
     }
 
     queries = {
@@ -461,6 +531,7 @@ const schemaBuilder = (sequelize, options) => {
     modelsTypes,
     queries,
     mutations,
+    subscriptions,
     logger,
     nameFormatter
   }
