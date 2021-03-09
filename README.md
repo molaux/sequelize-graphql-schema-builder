@@ -602,9 +602,57 @@ A prefix for generated queries and types.
 
 #### `extraModelFields({ modelsTypes, nameFormatter, logger }, model)`
 
-A callback that lets you add custom fields to Sequelize models types.
+A callback that lets you add custom fields to Sequelize models types. It will be called each time a GraphQL model type is built. The resulting object will be merged with model's GraphQL type fields.
 
-To be documented...
+[In this simple example (it's in the `extra-fields` branch)](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/master/src/models/sakila/extensions/Staff.cjs), we use this hook to inject rich country infos coming from [restcountries.eu](https://restcountries.eu) to our `Country` GraphQL type. 
+
+```gql
+type Country {
+  countryId: ID!
+  country: String!
+  lastUpdate: Date!
+  infos: JSON
+  Cities(query: JSON, dissociate: Boolean): [City]
+}
+```
+
+In the example, we only return the field `infos` for `Country` model, but we can inject other common fields to all models if needed.
+
+```gql
+query {
+  Countries(query: { limit: 3 }) {
+    country
+    infos
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "Countries": [
+      {
+        "country": "Afghanistan",
+        "infos": [
+          {
+            "name": "Afghanistan",
+            "topLevelDomain": [
+              ".af"
+            ],
+            "alpha2Code": "AF",
+            "alpha3Code": "AFG",
+            "callingCodes": [
+              "93"
+            ],
+            ...
+          }
+        ]
+      },
+      ...
+    ]
+  }
+}
+```
 
 #### `extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)`
 
