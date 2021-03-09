@@ -91,7 +91,9 @@ const cleanWhereQuery = (model, whereClause, type) => {
           case 'INTEGER':
           case 'TINYINT':
           case 'SMALLINT':
-            value = parseInt(value, 10)
+            value = Array.isArray(value)
+              ? value.map(v => parseInt(v, 10))
+              : parseInt(value, 10)
             break
         }
 
