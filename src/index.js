@@ -111,7 +111,7 @@ const schemaBuilder = (sequelize, options) => {
           : modelsTypes[nameFormatter.formatTypeName(association.target.name)],
         args: {
           query: { type: GraphQLJSON },
-          optimized: { type: GraphQLBoolean }
+          dissociate: { type: GraphQLBoolean }
         },
         resolve: (...args) => resolver(association, {
           before: beforeResolverFactory(association.target, { nameFormatter, logger, maxManyAssociations })
@@ -262,8 +262,7 @@ const schemaBuilder = (sequelize, options) => {
       // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
       type: new GraphQLList(modelType),
       args: {
-        query: { type: GraphQLJSON },
-        optimized: { type: GraphQLBoolean }
+        query: { type: GraphQLJSON }
       },
       resolve: manyResolver
     }

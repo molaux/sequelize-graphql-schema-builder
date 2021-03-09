@@ -167,15 +167,15 @@ LEFT OUTER JOIN "address" AS "Address" ON "Staff"."address_id" = "Address"."addr
 ORDER BY "Staff"."staff_id" ASC
 ```
 
-### optimized
-The previous big join query can be slitted where you want with the optionnal argument `optimized` (default is `true`) :
+### dissociate
+The previous big join query can be splitted where you want with the optionnal argument `dissociate` (default is `false`) :
 
 ```gql
 query {
   Staffs {
     firstName
     fullName
-    Store(optimized: false) { 
+    Store(dissociate: true) { 
       ManagerStaff {
       	firstName
       }
@@ -245,7 +245,7 @@ query {
 ```
 This time, "Mike HILLYER" is excluded, since he has no `Store`.
 
-Note that this is not compatible with the `optimized`: `false` option on the same node since the required is passed to the `include` dependencies tree of the root requested element by Sequelize.
+Note that this is not compatible with the `dissociate`: `true` argument on the same node since the required is passed to the `include` dependencies tree of the root requested element by Sequelize.
 
 ### query
 
@@ -265,21 +265,19 @@ type Film {
   lastUpdate: Date!
   languageId: ID!
   originalLanguageId: ID
-  Inventories(query: JSON, optimized: Boolean): [Inventory]
-  Language(query: JSON, optimized: Boolean): Language
-  OriginalLanguage(query: JSON, optimized: Boolean): Language
-  Actors(query: JSON, optimized: Boolean): [Actor]
-  Categories(query: JSON, optimized: Boolean): [Category]
+  Inventories(query: JSON, dissociate: Boolean): [Inventory]
+  Language(query: JSON, dissociate: Boolean): Language
+  OriginalLanguage(query: JSON, dissociate: Boolean): Language
+  Actors(query: JSON, dissociate: Boolean): [Actor]
+  Categories(query: JSON, dissociate: Boolean): [Category]
 }
 ```
 
 #### query
 
 ```gql
-Films(query: JSON, optimized: Boolean): [Film]
+Films(query: JSON): [Film]
 ```
-
-Note: the `optimized` option on the root query has currently no effect.
 
 ```gql
 query {
@@ -370,6 +368,8 @@ query {
 ```
 
 The `limit` and `offset` options are supported in nested elements but be warned that the Sequelize `separate` flag is automatically setted in association. (See [Sequelize documentation](https://sequelize.org/master/class/lib/model.js~Model.html#static-method-findAll)).
+
+Note that the `query` argument is more limited (by default) on nested nodes since its injected in association includes to the root `findAll` Sequelize query. To retrieve the behavior of root query (for example, for being able to use `order`) in nested nodes, you must `dissociate` the node.
 
 #### group
 
@@ -584,9 +584,9 @@ mutation {
 
 ## API
 
-### `sequelizeToGraphQLSchemaBuilder`
+### `schemaBuilder`
 ```javascript
-sequelizeToGraphQLSchemaBuilder(sequelize, { 
+schemaBuilder(sequelize, { 
   namespace: '',
   extraModelFields: () => ({}),
   extraModelQueries: () => ({}),

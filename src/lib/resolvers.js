@@ -5,7 +5,7 @@ const { getRequestedAttributes } = require('./graphql')
 const { getNestedElements } = require('./sequelize')
 const { cleanWhereQuery } = require('./query')
 
-const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, maxManyAssociations }) => async (findOptions, { optimized }, context, infos) => {
+const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, maxManyAssociations }) => async (findOptions, { dissociate }, context, infos) => {
   logger.indent()
   delete findOptions.graphqlContext
   delete findOptions.logging

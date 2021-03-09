@@ -235,9 +235,9 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
     }
 
     for (const field of resolvedSelections) {
-      const { optimized } = parseGraphQLArgs(field.arguments, variables)
+      const { dissociate } = parseGraphQLArgs(field.arguments, variables)
 
-      if (((optimized !== undefined) && !optimized)) {
+      if (dissociate) {
         continue
       }
 
