@@ -420,27 +420,27 @@ createFilm(input: FilmCreateInput): Film
 mutation {
   createFilm(input: {
     title: "Interstellar"
-    // a new language
+    # a new language
     Language: { 
     	name: "Breton" 
   	}
-    // an existing language
+    # an existing language
     OriginalLanguage: { 
       languageId: 2
     }
     Categories: [
-      // a new Category
+      # a new Category
       { 
         name: "New category"
       }
-      // an existing Category
+      # an existing Category
       {
         categoryId: 14
       }
-      // a new Category
+      # a new Category
       { 
         name: "Other category"
-        // we can create other nested creations / associations as well
+        # we can create other nested creations / associations as well
       }
     ]
   }) {
