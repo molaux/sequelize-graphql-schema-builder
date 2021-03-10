@@ -9,28 +9,30 @@ const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
 
 const getTargetKey = (association) => association.options.targetKey ?? association.target.primaryKeyAttribute
 
-const getNestedInputs = (input, model, inputType, { nameFormatter, logger }) => {
+const inputResolver = async (input, model, inputType, { nameFormatter, logger, pubSub }) => {
   logger.indent()
+  // const foreignHooks = []
+  const resolvers = []
   const sequelizeInput = {}
-  const includes = []
-  const foreignHooks = []
 
   for (const key in input) {
-    const modelName = nameFormatter.fieldNameToModelName(key)
+    const targetModelName = nameFormatter.fieldNameToModelName(key)
 
-    // Associations
-    if (modelName in model.associations) {
-      const targetKey = getTargetKey(model.associations[modelName])
-      const foreignKey = model.associations[modelName].foreignKey.name ?? model.associations[modelName].foreignKey
-      // many
+    if (targetModelName in model.associations) {
+      // Associations
+
+      const targetKey = getTargetKey(model.associations[targetModelName])
+      const foreignKey = model.associations[targetModelName].foreignKey.name ?? model.associations[targetModelName].foreignKey
+      const targetModel = model.associations[targetModelName].target
+
       if (inputType.getFields()[key].type instanceof GraphQLList) {
+        // [one|many] to many association
+
         if (!Array.isArray(input[key])) {
-          throw Error(`${model.name} -> ${modelName} should be an array`)
+          throw Error(`${model.name} -> ${targetModelName} should be an array`)
         }
 
-        sequelizeInput[modelName] = []
-        const mergedNestedIncludes = []
-        const foreigns = []
+        const foreignIds = []
         const foreignCreations = []
         for (const inputItem of input[key]) {
           const ofType = inputType.getFields()[key].type.ofType instanceof GraphQLUnionInputType
@@ -40,90 +42,82 @@ const getNestedInputs = (input, model, inputType, { nameFormatter, logger }) => 
             : inputType.getFields()[key].type.ofType
 
           // Check all inputs
-          const {
-            sequelizeInput: nestedSequelizeInput,
-            includes: nestedIncludes,
-            foreignHooks: nestedForeignHooks
-          } = getNestedInputs(
-            inputItem,
-            model.associations[modelName].target,
-            ofType,
-            { nameFormatter, logger }
-          )
-
           if (ofType instanceof InputModelIDType) {
+            // associate with existing foreign
             logger.log('getNestedInputs oneToMany : Foreign simple', {
               key,
-              'model.associations[modelName].target.name': model.associations[modelName].target.name,
+              'targetModel.name': targetModel.name,
               inputItem
             })
-            // Should not be created, do not include inputs or includes
-            foreigns.push(inputItem[targetKey])
-            // Following does not work as for association setters
-            // sequelizeInput[modelName].push(nestedSequelizeInput[targetKey])
+            foreignIds.push(inputItem[targetKey])
           } else {
-            // chain hooks
-            if (nestedForeignHooks.length) {
-              logger.log('getNestedInputs oneToMany : Foreign Need hooks', {
-                key,
-                'model.associations[modelName].target.name': model.associations[modelName].target.name,
-                inputItem
-              })
-              // we cannot create through nested so manual create instead
-              foreignCreations.push(async function () {
-                if (!this.createdModel) {
-                  this.createdModel = await model.associations[modelName].target.create(
-                    nestedSequelizeInput,
-                    { include: nestedIncludes }
-                  )
-                }
-                await Promise.all(nestedForeignHooks.map(hook => hook(this.createdModel)))
-                return this.createdModel
-              })
-            } else {
-              logger.log('getNestedInputs oneToMany : Foreign Dont Need hooks', {
-                key,
-                'model.associations[modelName].target.name': model.associations[modelName].target.name,
-                inputItem
-              })
-              // Its a new association with non model
-              sequelizeInput[modelName].push(nestedSequelizeInput)
+            // associate with new one
+            const {
+              sequelizeInput: foreignSequelizeInput,
+              resolvers: foreignResolvers
+            } = await inputResolver(
+              inputItem,
+              targetModel,
+              ofType,
+              { nameFormatter, logger, pubSub }
+            )
 
-              // Don't merge twice the same model
-              if (!nestedIncludes
-                .filter(({ association: nestedAssociation }) => mergedNestedIncludes
-                  .filter(({ association }) => association === nestedAssociation).length)
-                .length) {
-                mergedNestedIncludes.push(...nestedIncludes)
-              }
-            }
+            // remember creations to set it all at once
+            const createdModel = await targetModel.create(
+              foreignSequelizeInput
+            )
+
+            await Promise.all(foreignResolvers.map(resolver => resolver(createdModel)))
+
+            foreignCreations.push(createdModel)
           }
         }
 
-        if (foreigns.length || foreignCreations.length) {
-          foreignHooks.push(
-            async (instance, method = 'add') => {
-              const foreignCreationsInstances = await Promise.all(foreignCreations.map(hook => hook()))
-              return instance[model.associations[modelName].accessors[method]]([
-                ...foreigns,
-                ...foreignCreationsInstances
+        if (foreignIds.length || foreignCreations.length) {
+          resolvers.push(
+            async (instance, method = 'set') => {
+              // is there dereferenced or existing associations ?
+              const dereferencedForeigns = []
+              const existingForeigns = []
+              if (pubSub && method === 'set') {
+                const associatedModels = await instance[model.associations[targetModelName].accessors.get]()
+                for (const associatedModel of associatedModels) {
+                  if (!foreignIds.find((id) => id === associatedModel[targetKey])) {
+                    // foreigns does not include old associated model
+                    dereferencedForeigns.push(associatedModel)
+                  } else {
+                    // foreign was already present
+                    existingForeigns.push(associatedModel[targetKey])
+                  }
+                }
+              }
+
+              // TODO : if its a one to many, old referenced one has changed
+              pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
+              const result = await instance[model.associations[targetModelName].accessors[method]]([
+                ...foreignIds,
+                ...foreignCreations
               ])
+
+              // publish foreign associations updates
+              const newForeigns = foreignIds.filter((id) => !existingForeigns.find((existingForeignId) => existingForeignId === id))
+              if (newForeigns.length || dereferencedForeigns.length) {
+                pubSub?.publish(
+                  'modelsUpdated',
+                  {
+                    model: targetModel,
+                    instances: dereferencedForeigns,
+                    ids: newForeigns
+                  }
+                )
+              }
+
+              return result
             }
           )
         }
-
-        if (!mergedNestedIncludes
-          .filter(({ association: nestedAssociation }) => includes
-            .filter(({ association }) => association === nestedAssociation).length)
-          .length) {
-          includes.push(({
-            association: model.associations[modelName],
-            include: mergedNestedIncludes
-          }))
-        }
       } else {
-        // one
-        // Creation or foreign ?
+        // many to one association
         const finalType = inputType.getFields()[key].type instanceof GraphQLNonNull
           ? inputType.getFields()[key].type.ofType
           : inputType.getFields()[key].type
@@ -133,57 +127,45 @@ const getNestedInputs = (input, model, inputType, { nameFormatter, logger }) => 
           })
           : finalType
 
-        const {
-          sequelizeInput: nestedSequelizeInput,
-          includes: nestedIncludes,
-          foreignHooks: nestedForeignHooks
-        } = getNestedInputs(
-          input[key],
-          model.associations[modelName].target,
-          ofType,
-          { nameFormatter, logger }
-        )
-
+        // Creation or existing foreign ?
         if (ofType instanceof InputModelIDType) {
           logger.log('getNestedInputs manyToOne : Foreign simple', {
             key,
-            'model.associations[modelName].target.name': model.associations[modelName].target.name,
+            'targetModel.name': targetModel.name,
             'input[key]': input[key]
           })
           sequelizeInput[foreignKey] = input[key][targetKey]
+          // new foreign will be updated
+          if (pubSub) {
+            // publish the fact that target is updated (its reverse many association changed)
+            pubSub.publish('modelsUpdated', {
+              model: targetModel,
+              ids: [input[key][targetKey]]
+            })
+          }
         } else {
           // Its a new associated model
-          if (nestedForeignHooks.length) {
-            logger.log('getNestedInputs manyToOne : Foreign Need hooks', {
-              key,
-              'model.associations[modelName].target.name': model.associations[modelName].target.name,
-              'input[key]': input[key]
-            })
-            // we cannot create through nested so manual create instead
-            foreignHooks.push(
-              async function (instance, method = 'set') {
-                if (!this.createdModel) {
-                  this.createdModel = await model.associations[modelName].target.create(
-                    nestedSequelizeInput,
-                    { include: nestedIncludes }
-                  )
-                }
-                return instance[model.associations[modelName].accessors[method]](this.createdModel)
-              }
-            )
-          } else {
-            sequelizeInput[modelName] = nestedSequelizeInput
-            includes.push({
-              association: model.associations[modelName]
-            })
+          const {
+            sequelizeInput: foreignSequelizeInput,
+            resolvers: foreignResolvers
+          } = await inputResolver(
+            input[key],
+            targetModel,
+            ofType,
+            { nameFormatter, logger, pubSub }
+          )
+          console.log('foreignSequelizeInput', foreignSequelizeInput)
+          const createdModel = await targetModel.create(
+            foreignSequelizeInput
+          )
 
-            if (nestedIncludes.length && !nestedIncludes
-              .filter(({ association: nestedAssociation }) => includes
-                .filter(({ association }) => association === nestedAssociation).length)
-              .length) {
-              includes.push(nestedIncludes)
-            }
-          }
+          await Promise.all(foreignResolvers.map((fr) => fr(createdModel)))
+          pubSub?.publish('modelsCreated', {
+            model: targetModel,
+            instances: [createdModel]
+          })
+
+          sequelizeInput[foreignKey] = createdModel[targetKey]
         }
       }
     } else {
@@ -191,9 +173,9 @@ const getNestedInputs = (input, model, inputType, { nameFormatter, logger }) => 
       sequelizeInput[key] = input[key]
     }
   }
-  logger.log('findOptions getNestedInputs : end', { sequelizeInput, includes, foreignHooks })
+  // logger.log('findOptions getNestedInputs : end', { sequelizeInput, includes, foreignHooks })
   logger.outdent()
-  return { sequelizeInput, includes, foreignHooks }
+  return { sequelizeInput, resolvers }
 }
 
 const getPrimaryKeyType = (model, cache) => {
@@ -389,7 +371,7 @@ const findOptionsMerger = (fo1, fo2) => {
 
 module.exports = {
   getPrimaryKeyType,
-  getNestedInputs,
+  inputResolver,
   getNestedElements,
   findOptionsMerger
 }

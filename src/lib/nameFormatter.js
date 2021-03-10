@@ -15,7 +15,7 @@ const nameFormatterFactory = namespace => ({
   formatTypeName: function (type) { return this.formatModelName(type) },
   formatInsertInputTypeName: function (type) { return `${this.formatModelName(type)}CreateInput` },
   formatUpdateInputTypeName: function (type) { return `${this.formatModelName(type)}UpdateInput` },
-  formatQueryName: function (modelName) { return this.namespaceize(modelName) },
+  formatQueryName: function (modelName) { return this.formatModelName(modelName) },
   formatInsertMutationName: function (modelName) { return `create${this.formatModelName(modelName)}` },
   formatDeleteMutationName: function (modelName) { return `delete${this.formatModelName(modelName)}` },
   formatUpdateMutationName: function (modelName) { return `update${this.formatModelName(modelName)}` },

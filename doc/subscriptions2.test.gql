@@ -1,0 +1,240 @@
+subscription {
+  createdLanguage {
+    languageId
+    name
+    Films {
+      title
+    }
+  }
+}
+subscription {
+  updatedLanguage {
+    languageId
+    name
+    Films(query: { limit: 3, order: [["filmId", "DESC"]] }, dissociate: true) {
+      filmId
+      title
+    }
+  }
+}
+
+subscription {
+  createdFilm {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+  }
+}
+subscription {
+  updatedFilm {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+  }
+}
+
+subscription {
+  createdCategory {
+    categoryId
+    name
+    Films(query: { limit: 3, order: [["filmId", "DESC"]] }, dissociate: true) {
+      filmId
+      title
+    }
+  }
+}
+
+subscription {
+  updatedCategory {
+    categoryId
+    name
+    Films(query: { limit: 3, order: [["filmId", "DESC"]] }, dissociate: true) {
+      filmId
+      title
+    }
+  }
+}
+
+mutation {
+  createFilm(input: {
+    title: "initial title"
+    # a new language
+    Language: { 
+    	name: "initial language" 
+  	}
+    # an existing language
+    OriginalLanguage: { 
+      languageId: 1
+    }
+    Categories: [
+      # a new Category
+      { 
+        name: "initial new category"
+      }
+      # an existing Category
+      {
+        categoryId: 14
+      }
+      # a new Category
+      { 
+        name: "initial other category"
+        # we can create other nested creations / associations as well
+      }
+    ]
+  }) {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+    OriginalLanguage {
+      languageId
+      name
+    }
+  }
+}
+
+mutation {
+  updateFilm(query: { where: { filmId: 1001 } }, input: {
+    title: "updated title"
+    # a new language
+    Language: { 
+    	name: "updated new language" 
+  	}
+    # an existing language
+    OriginalLanguage: { 
+      languageId: 2
+    }
+    Categories: [
+      # a new Category
+      { 
+        name: "Updated new category"
+      }
+      # an existing Category
+      {
+        categoryId: 16
+      }
+      # a new Category
+      { 
+        name: "Updated other new category"
+        # we can create other nested creations / associations as well
+      }
+    ]
+  }) {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+    OriginalLanguage {
+      languageId
+      name
+    }
+  }
+}
+
+mutation {
+  updateFilm(query: { where: { filmId: 1001 } }, input: {
+    title: "updated title 2"
+    # a new language
+    Language: { 
+    	name: "updated new language 2" 
+  	}
+    # an existing language
+    OriginalLanguage: { 
+      languageId: 1
+    }
+    addCategories: [
+      # a new Category
+      { 
+        name: "Added new category"
+      }
+      # an existing Category
+      {
+        categoryId: 9
+      }
+      # a new Category
+      { 
+        name: "Added other new category"
+        # we can create other nested creations / associations as well
+      }
+    ]
+  }) {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+    OriginalLanguage {
+      languageId
+      name
+    }
+  }
+}
+
+mutation {
+  updateFilm(query: { where: { filmId: 1001 } }, input: {
+    title: "updated title 3"
+    Language: { 
+    	name: "updated new language 3" 
+  	}
+    OriginalLanguage: { 
+      languageId: 1
+    }
+    removeCategories: [
+      { 
+        categoryId: 16
+      }
+      {
+        categoryId: 9
+      }
+      { 
+        categoryId: 23
+      }
+    ]
+  }) {
+    filmId
+    title
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+    OriginalLanguage {
+      languageId
+      name
+    }
+  }
+}

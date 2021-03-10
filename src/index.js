@@ -34,7 +34,7 @@ const {
 } = require('./lib/graphql.js')
 
 const {
-  getNestedInputs,
+  inputResolver,
   findOptionsMerger
 } = require('./lib/sequelize.js')
 
@@ -294,8 +294,32 @@ const schemaBuilder = (sequelize, options) => {
         const models = await manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
         pubSub?.publish('modelsDeleted', models)
 
+        // TODO: consider foreigns oneToMany cascade set NULL or delete
+
         model.destroy({ where: cleanWhereQuery(model, query.where) })
         return models
+      }
+    }
+
+    const AccumulatorPubSub = function () {
+      this.register = []
+      return {
+        publish: (event, payload) => {
+          this.register.push({ event, payload })
+          console.log(this.register)
+        },
+        flushTo: (pubSub) => {
+          const payloads = {}
+          for (const { event, payload } of this.register) {
+            if (!payloads[event]) {
+              payloads[event] = []
+            }
+            payloads[event].push(payload)
+          }
+          for (const event in payloads) {
+            pubSub.publish(event, payloads[event])
+          }
+        }
       }
     }
 
@@ -306,16 +330,21 @@ const schemaBuilder = (sequelize, options) => {
         input: { type: modelInsertInputType }
       },
       resolve: async (parent, { input }, { pubSub, ...ctx }, ...rest) => {
-        const { sequelizeInput, includes: include, foreignHooks } = getNestedInputs(input, model, modelInsertInputType, { nameFormatter, logger })
-        const createdModel = await model.create(sequelizeInput, { include })
+        const accumulatorPubSub = pubSub
+          ? new AccumulatorPubSub()
+          : null
+        const { sequelizeInput, resolvers } = await inputResolver(input, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
+        const instance = await model.create(sequelizeInput)
 
-        pubSub?.publish('modelsCreated', [createdModel])
+        await Promise.all(resolvers.map(r => r(instance, 'set')))
 
-        await Promise.all(foreignHooks.map(hook => hook(createdModel)))
+        accumulatorPubSub?.publish('modelsCreated', { model, instances: [instance] })
+        accumulatorPubSub?.flushTo(pubSub)
+
         return manyResolver(parent, {
           query: {
             where: {
-              [model.primaryKeyAttribute]: createdModel[model.primaryKeyAttribute]
+              [model.primaryKeyAttribute]: instance[model.primaryKeyAttribute]
             }
           }
         }, { pubSub, ...ctx }, ...rest)
@@ -334,129 +363,101 @@ const schemaBuilder = (sequelize, options) => {
           throw Error('You must define a where clause when updating')
         }
 
-        // sequelizeInput and includes ave to be be divised by Pks.
-        // Then, foreign hooks have to be remerged
-        // with resulting bulk created entities
-        const localHooks = {}
-        const foreignKeysInput = {}
+        const accumulatorPubSub = pubSub
+          ? new AccumulatorPubSub()
+          : null
+
+        const setInput = {}
+        const addInput = {}
+        const removeInput = {}
         for (const rawField in input) {
-          // test if field is a many modifier
           const matches = rawField.match(/^(?<action>add|remove)(?<field>.+)$/)
           const action = matches?.groups?.action ?? 'set'
           const field = matches?.groups?.field ?? rawField
-
-          if (field in associationInsertInputFields && action !== 'remove') {
-            const foreignModelName = nameFormatter.fieldNameToModelName(field)
-            const foreignModel = model.associations[foreignModelName].target
-            const foreignModelNameAs = model.associations[foreignModelName].as
-            const {
-              sequelizeInput: foreignSequelizeInput,
-              includes: foreignIncludes,
-              foreignHooks: foreignForeignHooks
-            } = getNestedInputs(
-              { [field]: input[rawField] }, // mock input as if it was the only field
-              model,
-              modelInsertInputType,
-              { nameFormatter, logger }
-            )
-
-            const foreignKey = model.associations[foreignModelName].foreignKey.name ?? model.associations[foreignModelName].foreignKey
-            // foreign(s) creation
-            const sequelizeInputs = foreignSequelizeInput[foreignModelNameAs] !== undefined
-              ? Array.isArray(foreignSequelizeInput[foreignModelNameAs])
-                ? foreignSequelizeInput[foreignModelNameAs]
-                : [foreignSequelizeInput[foreignModelNameAs]]
-              : []
-            // single foreign reference
-            const foreignKeyValue = !Array.isArray(foreignSequelizeInput[foreignModelNameAs]) && foreignSequelizeInput[foreignKey]
-              ? foreignSequelizeInput[foreignKey]
-              : undefined
-            if (foreignKeyValue !== undefined) {
-              foreignKeysInput[foreignKey] = foreignKeyValue
-            } else {
-              if ((!foreignForeignHooks.length && !sequelizeInputs.length)) {
-                console.log(foreignForeignHooks, sequelizeInputs)
-                throw Error(`Error, something unexpected happened with ${model.name} -> ${foreignModelName} (through ${field} by ${foreignKey})`)
-              }
-
-              const include = sequelizeInputs.length
-                ? foreignIncludes[foreignModelName]
-                : null
-
-              const createdModels = sequelizeInputs.map((sequelizeInput) => foreignModel.create(sequelizeInput, { ...include }))
-              localHooks[field] = async (instance) => {
-                for (const foreignForeignHook of foreignForeignHooks) {
-                  await foreignForeignHook(instance, 'add')
-                }
-                return instance[model.associations[foreignModelName].accessors[
-                  Array.isArray(foreignSequelizeInput[foreignModelNameAs]) ? 'add' : 'set']
-                ](Array.isArray(foreignSequelizeInput[foreignModelNameAs])
-                  ? await Promise.all(createdModels)
-                  : (await Promise.all(createdModels))[0]
-                )
-              }
-            }
+          if (action === 'set') {
+            setInput[field] = input[rawField]
+          } else if (action === 'add') {
+            addInput[field] = input[rawField]
+          } else if (action === 'remove') {
+            removeInput[field] = input[rawField]
           }
         }
 
-        const models = []
-        const hooks = []
+        const {
+          sequelizeInput: sequelizeSetInput,
+          resolvers: setResolvers
+        } = await inputResolver(setInput, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
 
+        const {
+          sequelizeInput: sequelizeAddInput,
+          resolvers: addResolvers
+        } = await inputResolver(addInput, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
+
+        if (Object.keys(sequelizeAddInput).length) {
+          throw Error('add association should not generate input')
+        }
+
+        const instances = []
+
+        // retrieve instances targeted by query
         for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where) })) {
-          for (const rawField in input) {
-            const matches = rawField.match(/^(?<action>add|remove)(?<field>.+)$/)
-            const action = matches?.groups?.action ?? 'set'
-            const field = matches?.groups?.field ?? rawField
-
-            if (action !== 'remove') {
-              if (field in associationInsertInputFields) {
-                const foreignModelName = nameFormatter.fieldNameToModelName(field)
-                const foreignModelNameAs = model.associations[foreignModelName].as
-                const foreignKey = model.associations[foreignModelNameAs].foreignKey.name ?? model.associations[foreignModelNameAs].foreignKey
-                if (!Array.isArray(input[rawField]) && foreignKeysInput[foreignKey] !== undefined) {
-                  instance[foreignKey] = foreignKeysInput[foreignKey]
-                } else {
-                  hooks.push(async () => {
-                    if (Array.isArray(input[rawField]) && action === 'set') {
-                      const foreignModelName = nameFormatter.fieldNameToModelName(field)
-                      await instance[model.associations[foreignModelName].accessors.set]([])
-                    }
-                    await localHooks[field](instance)
-                  })
-                }
-              } else {
-                instance[field] = input[rawField]
-              }
-            } else {
-              const foreignModelName = nameFormatter.fieldNameToModelName(field)
-              const realFk = Object.keys(model.associations[foreignModelName].target.primaryKeys)[0]
-              hooks.push(() => instance[model.associations[foreignModelName].accessors.remove](
-                input[rawField].map(oid => oid[realFk])
-              ))
-            }
+          for (const field in sequelizeSetInput) {
+            // TODO : check if it's really updated
+            instance[field] = sequelizeSetInput[field]
+            console.log(field, sequelizeSetInput[field])
           }
-          models.push(instance)
+
+          const removals = []
+          for (const removeField in removeInput) {
+            const foreignModelName = nameFormatter.fieldNameToModelName(removeField)
+            const realFk = model.associations[foreignModelName].target.primaryKeyAttribute
+            accumulatorPubSub?.publish('modelsRemoved', {
+              model: model.associations[foreignModelName].target,
+              ids: removeInput[removeField].map(oid => oid[realFk])
+            })
+            removals.push(instance[model.associations[foreignModelName].accessors.remove](
+              removeInput[removeField].map(oid => oid[realFk])
+            ))
+          }
+          await Promise.all([
+            ...setResolvers.map((r) => r(instance, 'set')),
+            ...addResolvers.map((r) => r(instance, 'add')),
+            ...removals
+          ])
+
+          instances.push(instance)
         }
 
-        await Promise.all(models.map(instance => instance.save()))
-        await Promise.all(hooks.map(hook => hook()))
+        await Promise.all(instances.map(instance => instance.save()))
 
-        pubSub?.publish('modelsUpdated', models)
+        accumulatorPubSub?.publish('modelsUpdated', { model, instances })
+        accumulatorPubSub?.flushTo(pubSub)
 
         return manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
       }
     }
 
-    const instancesResolver = (models, args, ...rest) => {
-      if (models.length) {
-        const [instance] = models
+    const payloadsReducer = (payloads) => payloads
+      // filter payloads by model
+      .filter(({ model: { name: payloadModelName } }) => payloadModelName === model.name)
+      // resolve instances
+      .map(({ ids, instances }) => ([
+        ...ids ?? [],
+        ...instances ? instances.map((instance) => instance[model.primaryKeyAttribute]) : []
+      ]))
+      // unicity
+      .reduce((set, ids) => ids.map(set.add) && set, new Set())
+      .values()
+
+    const instancesResolver = (payloads, args, ...rest) => {
+      if (payloads.length) {
         return manyResolver(
           null,
           {
             query: {
               where: {
-                [instance.constructor.primaryKeyAttribute]: {
-                  _inOp: models.map(model => model[model.constructor.primaryKeyAttribute])
+                [model.primaryKeyAttribute]: {
+                  _inOp: payloadsReducer(payloads)
                 }
               }
             }
@@ -469,8 +470,8 @@ const schemaBuilder = (sequelize, options) => {
 
     const subscribeToModelInstances = (action) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
       () => pubSub.asyncIterator(action),
-      (models) => models.reduce(
-        (dontFilter, { constructor: { name, primaryKeyAttribute } }) => dontFilter && name === model.name,
+      (payloads) => payloads.reduce(
+        (keep, { model: { name: payloadModelName } }) => keep && payloadModelName === model.name,
         true
       )
     )(payload, args, { pubSub, ...ctx }, ...rest)
@@ -493,7 +494,7 @@ const schemaBuilder = (sequelize, options) => {
     subscriptions[deletedModelSubscriptionName] = {
       type: new GraphQLList(modelIDType),
       subscribe: subscribeToModelInstances('modelsDeleted'),
-      resolve: (models) => models
+      resolve: (payloads) => payloadsReducer(payloads).map((id) => ({ [model.primaryKeyAttribute]: id }))
     }
 
     queries = {
