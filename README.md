@@ -3,7 +3,7 @@
 This project is an experimental work that aims to build a complete GraphQL schema for CRUD operations, on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
 
 The `sequelizeGraphQLSchemaBuilder` builds queries, mutations, subscriptions and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and mutations are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
-  
+
 ## Installation
 
 ``` bash
@@ -41,13 +41,22 @@ const schema = sequelize => {
 }
 ```
 
-## GraphQL API
+## Example
 
 This documentation is based on the [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder-example).
 
-### Introduction
+## Queries
 
 The query api will shape like this :
+
+```gql
+type RootQueryType {
+  ...
+  Staffs(query: JSON): [Staff]
+  Stores(query: JSON): [Store]
+  ...
+}
+```
 
 ```gql
 query {
@@ -230,26 +239,6 @@ WHERE "Store"."store_id" = 2;
 
 The 2 `Staff` instances resulting from the first request resolve their `Store` seperatly.
 
-### required
-
-Lets say we haved nullized "Mike HILLYER" `store_id` in the database.
-
-```gql
-query {
-  Staffs {
-    fullName
-    Store(query: { required: true }) {
-      storeId
-    }
-  }
-}
-```
-This time, "Mike HILLYER" is excluded, since he has no `Store`.
-
-Note that this is not compatible with the `dissociate`: `true` argument on the same node since the required is passed to the `include` dependencies tree of the root requested element by Sequelize.
-
-### query
-
 For each model, a corresponding type is created :
 ```gql
 type Film {
@@ -274,7 +263,7 @@ type Film {
 }
 ```
 
-#### query
+### query
 
 ```gql
 Films(query: JSON): [Film]
@@ -336,6 +325,24 @@ query {
 ```
 
 The same request as above, but this time we filtered movies having actors named "DEAN".
+
+#### required
+
+Lets say we haved nullized "Mike HILLYER" `store_id` in the database.
+
+```gql
+query {
+  Staffs {
+    fullName
+    Store(query: { required: true }) {
+      storeId
+    }
+  }
+}
+```
+This time, "Mike HILLYER" is excluded, since he has no `Store`.
+
+Note that this is not compatible with the `dissociate`: `true` argument on the same node since the required is passed to the `include` dependencies tree of the root requested element by Sequelize.
 
 #### order, offset, limit
 
@@ -411,10 +418,16 @@ scalar InputFilmAssociationByFilmId
 
 `InputFilmAssociationByFilmId` can be a `FilmCreateInput` (an new film) or a `InputFilmByFilmId` (an existing film)
 
+An `atomic` boolean parameter is available for all mutations to enable/disable the use of transactions (default is `true`). When transactions are enabled (by default), if something goes wrong, transaction for whole mutation is rolled back and pending publications for subscriptions are canceled.
+
 ### create
 
 ```gql
-createFilm(input: FilmCreateInput): Film
+type RootMutationType {
+  ...
+  createFilm(input: FilmCreateInput, atomic: Boolean): Film
+  ...
+}
 ```
 
 ```gql
@@ -525,7 +538,11 @@ input FilmUpdateInput {
   removeCategories: [InputCategoryByCategoryId]
 }
 
-updateFilm(query: JSON, input: FilmUpdateInput): [Film]
+type RootMutationType {
+  ...
+  updateFilm(query: JSON, input: FilmUpdateInput, atomic: Boolean): [Film]
+  ...
+}
 ```
 
 We can see that all associations are union types, so you can create new entities or refer to existing one.
@@ -572,7 +589,11 @@ mutation {
 ### delete
 
 ```gql
-  deleteFilm(query: JSON): [Film]
+type RootMutationType {
+  ...
+  deleteFilm(query: JSON, atomic: Boolean): [Film]
+  ...
+}
 ```
 
 ```gql
@@ -589,9 +610,11 @@ The builder creates three subscriptions for each model :
 
 ```gql
 type RootSubscriptionType {
+  ...
   createdCountry: [Country]
   updatedCountry: [Country]
   deletedCountry: [CountryID]
+  ...
 }
 
 # Country ID type
@@ -604,7 +627,7 @@ The `CountryID` type is the `Country` type, reduced to the only field we are sur
 
 For subscriptions to work, you must [provide a `pubSub`](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/subscriptions/src/server.js) entry to the GraphQL context.
 
-Warning : the `created...` subscriptions does not yet handle bulk created objects !
+Warning : the cascading delete / set null is not handled yet, and will not trigger publications.
 
 See the [`subscriptions` branch of the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/subscriptions) for testing purpose.
 
@@ -711,3 +734,7 @@ To be documented...
 ### `findOptionsMerger(fo1, fo2)`
 
 To be documented...
+
+## Tests
+
+The [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder-example) embeds a jest test suite.
