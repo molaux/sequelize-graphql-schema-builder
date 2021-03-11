@@ -9,7 +9,8 @@ const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
 
 const getTargetKey = (association) => association.options.targetKey ?? association.target.primaryKeyAttribute
 
-const inputResolver = async (input, model, inputType, { nameFormatter, logger, pubSub }) => {
+const inputResolver = async (input, model, inputType, { nameFormatter, logger, pubSub, transaction }) => {
+  transaction = transaction ?? null
   logger.indent()
   // const foreignHooks = []
   const resolvers = []
@@ -59,16 +60,17 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               inputItem,
               targetModel,
               ofType,
-              { nameFormatter, logger, pubSub }
+              { nameFormatter, logger, pubSub, transaction }
             )
 
-            // remember creations to set it all at once
             const createdModel = await targetModel.create(
-              foreignSequelizeInput
+              foreignSequelizeInput,
+              { transaction }
             )
 
             await Promise.all(foreignResolvers.map(resolver => resolver(createdModel)))
 
+            // remember creations to set it all at once
             foreignCreations.push(createdModel)
           }
         }
@@ -80,7 +82,7 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               const dereferencedForeigns = []
               const existingForeigns = []
               if (pubSub && method === 'set') {
-                const associatedModels = await instance[model.associations[targetModelName].accessors.get]()
+                const associatedModels = await instance[model.associations[targetModelName].accessors.get]({ transaction })
                 for (const associatedModel of associatedModels) {
                   if (!foreignIds.find((id) => id === associatedModel[targetKey])) {
                     // foreigns does not include old associated model
@@ -97,7 +99,7 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               const result = await instance[model.associations[targetModelName].accessors[method]]([
                 ...foreignIds,
                 ...foreignCreations
-              ])
+              ], { transaction })
 
               // publish foreign associations updates
               const newForeigns = foreignIds.filter((id) => !existingForeigns.find((existingForeignId) => existingForeignId === id))
@@ -152,11 +154,11 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
             input[key],
             targetModel,
             ofType,
-            { nameFormatter, logger, pubSub }
+            { nameFormatter, logger, pubSub, transaction }
           )
-          console.log('foreignSequelizeInput', foreignSequelizeInput)
           const createdModel = await targetModel.create(
-            foreignSequelizeInput
+            foreignSequelizeInput,
+            { transaction }
           )
 
           await Promise.all(foreignResolvers.map((fr) => fr(createdModel)))

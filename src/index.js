@@ -285,19 +285,33 @@ const schemaBuilder = (sequelize, options) => {
     mutations[deleteMutationName] = {
       type: new GraphQLList(modelType),
       args: {
-        query: { type: GraphQLJSON }
+        query: { type: GraphQLJSON },
+        atomic: { type: GraphQLBoolean }
       },
-      resolve: async (parent, { query }, { pubSub, ...ctx }, ...rest) => {
+      resolve: async (parent, { query, atomic }, { pubSub, ...ctx }, ...rest) => {
         if (!query.where) {
           throw Error('You must define a where clause when deleting')
         }
-        const models = await manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
-        pubSub?.publish('modelsDeleted', models)
+        const transaction = atomic === undefined || atomic ? await sequelize.transaction() : null
 
-        // TODO: consider foreigns oneToMany cascade set NULL or delete
+        try {
+          const models = await manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
+          pubSub?.publish('modelsDeleted', models)
 
-        model.destroy({ where: cleanWhereQuery(model, query.where) })
-        return models
+          // TODO: consider foreigns oneToMany cascade set NULL or delete
+          model.destroy({ where: cleanWhereQuery(model, query.where), transaction })
+
+          if (transaction) {
+            await transaction.commit()
+          }
+
+          return models
+        } catch (error) {
+          if (transaction) {
+            await transaction.rollback()
+          }
+          throw error
+        }
       }
     }
 
@@ -306,7 +320,6 @@ const schemaBuilder = (sequelize, options) => {
       return {
         publish: (event, payload) => {
           this.register.push({ event, payload })
-          console.log(this.register)
         },
         flushTo: (pubSub) => {
           const payloads = {}
@@ -327,27 +340,47 @@ const schemaBuilder = (sequelize, options) => {
     mutations[insertMutationName] = {
       type: modelType,
       args: {
-        input: { type: modelInsertInputType }
+        input: { type: modelInsertInputType },
+        atomic: { type: GraphQLBoolean }
       },
-      resolve: async (parent, { input }, { pubSub, ...ctx }, ...rest) => {
-        const accumulatorPubSub = pubSub
-          ? new AccumulatorPubSub()
-          : null
-        const { sequelizeInput, resolvers } = await inputResolver(input, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
-        const instance = await model.create(sequelizeInput)
+      resolve: async (parent, { input, atomic }, { pubSub, ...ctx }, ...rest) => {
+        const transaction = atomic === undefined || atomic ? await sequelize.transaction() : null
 
-        await Promise.all(resolvers.map(r => r(instance, 'set')))
+        try {
+          const accumulatorPubSub = pubSub
+            ? new AccumulatorPubSub()
+            : null
 
-        accumulatorPubSub?.publish('modelsCreated', { model, instances: [instance] })
-        accumulatorPubSub?.flushTo(pubSub)
+          const { sequelizeInput, resolvers } = await inputResolver(
+            input,
+            model,
+            modelInsertInputType,
+            { nameFormatter, logger, pubSub: accumulatorPubSub, transaction }
+          )
+          const instance = await model.create(sequelizeInput, { transaction })
 
-        return manyResolver(parent, {
-          query: {
-            where: {
-              [model.primaryKeyAttribute]: instance[model.primaryKeyAttribute]
-            }
+          await Promise.all(resolvers.map(r => r(instance, 'set')))
+          accumulatorPubSub?.publish('modelsCreated', { model, instances: [instance] })
+
+          if (transaction) {
+            await transaction.commit()
           }
-        }, { pubSub, ...ctx }, ...rest)
+
+          accumulatorPubSub?.flushTo(pubSub)
+
+          return manyResolver(parent, {
+            query: {
+              where: {
+                [model.primaryKeyAttribute]: instance[model.primaryKeyAttribute]
+              }
+            }
+          }, { pubSub, ...ctx }, ...rest)
+        } catch (error) {
+          if (transaction) {
+            await transaction.rollback()
+          }
+          throw error
+        }
       }
     }
 
@@ -356,84 +389,108 @@ const schemaBuilder = (sequelize, options) => {
       type: new GraphQLList(modelType),
       args: {
         query: { type: GraphQLJSON },
-        input: { type: modelUpdateInputType }
+        input: { type: modelUpdateInputType },
+        atomic: { type: GraphQLBoolean }
       },
-      resolve: async (parent, { query, input }, { pubSub, ...ctx }, ...rest) => {
+      resolve: async (parent, { query, input, atomic }, { pubSub, ...ctx }, ...rest) => {
         if (!query.where) {
           throw Error('You must define a where clause when updating')
         }
 
-        const accumulatorPubSub = pubSub
-          ? new AccumulatorPubSub()
-          : null
+        const transaction = atomic === undefined || atomic ? await sequelize.transaction() : null
 
-        const setInput = {}
-        const addInput = {}
-        const removeInput = {}
-        for (const rawField in input) {
-          const matches = rawField.match(/^(?<action>add|remove)(?<field>.+)$/)
-          const action = matches?.groups?.action ?? 'set'
-          const field = matches?.groups?.field ?? rawField
-          if (action === 'set') {
-            setInput[field] = input[rawField]
-          } else if (action === 'add') {
-            addInput[field] = input[rawField]
-          } else if (action === 'remove') {
-            removeInput[field] = input[rawField]
-          }
-        }
+        try {
+          const accumulatorPubSub = pubSub
+            ? new AccumulatorPubSub()
+            : null
 
-        const {
-          sequelizeInput: sequelizeSetInput,
-          resolvers: setResolvers
-        } = await inputResolver(setInput, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
-
-        const {
-          sequelizeInput: sequelizeAddInput,
-          resolvers: addResolvers
-        } = await inputResolver(addInput, model, modelInsertInputType, { nameFormatter, logger, pubSub: accumulatorPubSub })
-
-        if (Object.keys(sequelizeAddInput).length) {
-          throw Error('add association should not generate input')
-        }
-
-        const instances = []
-
-        // retrieve instances targeted by query
-        for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where) })) {
-          for (const field in sequelizeSetInput) {
-            // TODO : check if it's really updated
-            instance[field] = sequelizeSetInput[field]
-            console.log(field, sequelizeSetInput[field])
+          const setInput = {}
+          const addInput = {}
+          const removeInput = {}
+          for (const rawField in input) {
+            const matches = rawField.match(/^(?<action>add|remove)(?<field>.+)$/)
+            const action = matches?.groups?.action ?? 'set'
+            const field = matches?.groups?.field ?? rawField
+            if (action === 'set') {
+              setInput[field] = input[rawField]
+            } else if (action === 'add') {
+              addInput[field] = input[rawField]
+            } else if (action === 'remove') {
+              removeInput[field] = input[rawField]
+            }
           }
 
-          const removals = []
-          for (const removeField in removeInput) {
-            const foreignModelName = nameFormatter.fieldNameToModelName(removeField)
-            const realFk = model.associations[foreignModelName].target.primaryKeyAttribute
-            accumulatorPubSub?.publish('modelsRemoved', {
-              model: model.associations[foreignModelName].target,
-              ids: removeInput[removeField].map(oid => oid[realFk])
-            })
-            removals.push(instance[model.associations[foreignModelName].accessors.remove](
-              removeInput[removeField].map(oid => oid[realFk])
-            ))
+          const {
+            sequelizeInput: sequelizeSetInput,
+            resolvers: setResolvers
+          } = await inputResolver(
+            setInput,
+            model,
+            modelInsertInputType,
+            { nameFormatter, logger, pubSub: accumulatorPubSub, transaction }
+          )
+
+          const {
+            sequelizeInput: sequelizeAddInput,
+            resolvers: addResolvers
+          } = await inputResolver(
+            addInput,
+            model,
+            modelInsertInputType,
+            { nameFormatter, logger, pubSub: accumulatorPubSub, transaction }
+          )
+
+          if (Object.keys(sequelizeAddInput).length) {
+            throw Error('add association should not generate input')
           }
-          await Promise.all([
-            ...setResolvers.map((r) => r(instance, 'set')),
-            ...addResolvers.map((r) => r(instance, 'add')),
-            ...removals
-          ])
 
-          instances.push(instance)
+          const instances = []
+
+          // retrieve instances targeted by query
+          for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where), transaction })) {
+            for (const field in sequelizeSetInput) {
+              instance[field] = sequelizeSetInput[field]
+            }
+
+            const removals = []
+            for (const removeField in removeInput) {
+              const foreignModelName = nameFormatter.fieldNameToModelName(removeField)
+              const realFk = model.associations[foreignModelName].target.primaryKeyAttribute
+              accumulatorPubSub?.publish('modelsRemoved', {
+                model: model.associations[foreignModelName].target,
+                ids: removeInput[removeField].map(oid => oid[realFk])
+              })
+              removals.push(instance[model.associations[foreignModelName].accessors.remove](
+                removeInput[removeField].map(oid => oid[realFk]),
+                { transaction }
+              ))
+            }
+            await Promise.all([
+              ...setResolvers.map((r) => r(instance, 'set')),
+              ...addResolvers.map((r) => r(instance, 'add')),
+              ...removals
+            ])
+
+            instances.push(instance)
+          }
+
+          await Promise.all(instances.map(instance => instance.save({ transaction })))
+
+          accumulatorPubSub?.publish('modelsUpdated', { model, instances })
+
+          if (transaction) {
+            await transaction.commit()
+          }
+
+          accumulatorPubSub?.flushTo(pubSub)
+
+          return manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
+        } catch (error) {
+          if (transaction) {
+            await transaction.rollback()
+          }
+          throw error
         }
-
-        await Promise.all(instances.map(instance => instance.save()))
-
-        accumulatorPubSub?.publish('modelsUpdated', { model, instances })
-        accumulatorPubSub?.flushTo(pubSub)
-
-        return manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
       }
     }
 
