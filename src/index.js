@@ -437,7 +437,7 @@ const schemaBuilder = (sequelize, options) => {
       }
     }
 
-    const payloadsReducer = (payloads) => payloads
+    const payloadsReducer = (payloads) => Array.from(payloads
       // filter payloads by model
       .filter(({ model: { name: payloadModelName } }) => payloadModelName === model.name)
       // resolve instances
@@ -446,8 +446,8 @@ const schemaBuilder = (sequelize, options) => {
         ...instances ? instances.map((instance) => instance[model.primaryKeyAttribute]) : []
       ]))
       // unicity
-      .reduce((set, ids) => ids.map(set.add) && set, new Set())
-      .values()
+      .reduce((set, ids) => ids.reduce((set, id) => set.add(id), set), new Set())
+      .values())
 
     const instancesResolver = (payloads, args, ...rest) => {
       if (payloads.length) {
@@ -471,8 +471,8 @@ const schemaBuilder = (sequelize, options) => {
     const subscribeToModelInstances = (action) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
       () => pubSub.asyncIterator(action),
       (payloads) => payloads.reduce(
-        (keep, { model: { name: payloadModelName } }) => keep && payloadModelName === model.name,
-        true
+        (keep, { model: { name: payloadModelName } }) => keep || payloadModelName === model.name,
+        false
       )
     )(payload, args, { pubSub, ...ctx }, ...rest)
 
