@@ -266,7 +266,7 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
 
       if (dissociate) {
         // we have to query needed foreignKey
-        if (['BelongsTo', 'BelongsToMany'].includes(model.associations[fieldName].associationType)) {
+        if (['BelongsTo'].includes(model.associations[fieldName].associationType)) {
           const targetKey = getTargetKey(model.associations[fieldName])
           if (!attributes.includes(targetKey)) {
             attributes.push(targetKey)
