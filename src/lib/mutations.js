@@ -29,16 +29,20 @@ module.exports = {
           }
           const transaction = atomic === undefined || atomic ? await sequelize.transaction() : null
           try {
+            const accumulatorPubSub = pubSub
+              ? new AccumulatorPubSub()
+              : null
             // TODO: consider foreigns oneToMany cascade set NULL or delete
             const models = await manyResolver(parent, { query, transaction }, { pubSub, ...ctx }, ...rest)
 
             await model.destroy({ where: cleanWhereQuery(model, query.where), transaction })
 
+            accumulatorPubSub?.publish('modelsDeleted', { model, instances: models })
+
             if (transaction) {
               await transaction.commit()
             }
-
-            pubSub?.publish('modelsDeleted', models)
+            accumulatorPubSub?.flushTo(pubSub)
 
             return models
           } catch (error) {
@@ -168,7 +172,7 @@ module.exports = {
               for (const removeField in removeInput) {
                 const foreignModelName = nameFormatter.fieldNameToModelName(removeField)
                 const realFk = model.associations[foreignModelName].target.primaryKeyAttribute
-                accumulatorPubSub?.publish('modelsRemoved', {
+                accumulatorPubSub?.publish('modelsUpdated', {
                   model: model.associations[foreignModelName].target,
                   ids: removeInput[removeField].map(oid => oid[realFk])
                 })
