@@ -152,11 +152,22 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
             'targetModel.name': targetModel.name,
             'input[key]': input[key]
           })
-          sequelizeInput[foreignKey] = input[key][targetKey]
-          // new foreign will be updated
-          if (pubSub) {
+          if (model.associations[targetModelName].associationType === 'HasOne') {
+            resolvers.push(
+              async (instance) => {
+                console.log('retrieving', targetModel.name, key, targetKey, input[key][targetKey])
+                const target = await targetModel.findByPk(input[key][targetKey], { transaction })
+                await instance[model.associations[targetModelName].accessors.set](target)
+                pubSub?.publish('modelsUpdated', {
+                  model: targetModel,
+                  instances: [target]
+                })
+              }
+            )
+          } else {
+            sequelizeInput[foreignKey] = input[key][targetKey]
             // publish the fact that target is updated (its reverse many association changed)
-            pubSub.publish('modelsUpdated', {
+            pubSub?.publish('modelsUpdated', {
               model: targetModel,
               ids: [input[key][targetKey]]
             })
@@ -197,7 +208,6 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               model: targetModel,
               instances: [createdModel]
             })
-
             sequelizeInput[foreignKey] = createdModel[targetKey]
           }
         }
