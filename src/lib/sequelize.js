@@ -63,15 +63,32 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               { nameFormatter, logger, pubSub, transaction }
             )
 
-            const createdModel = await targetModel.create(
-              foreignSequelizeInput,
-              { transaction }
-            )
+            // Do we have to wait for parent creation ?
+            if (model.associations[targetModelName].associationType === 'HasMany' &&
+              !model.associations[targetModelName].target.rawAttributes[targetKey].allowNull) {
+              resolvers.push(
+                async (instance) => {
+                  const createdModel = await targetModel.create(
+                    {
+                      ...foreignSequelizeInput,
+                      [foreignKey]: instance[targetKey]
+                    },
+                    { transaction }
+                  )
+                  pubSub?.publish('modelsCreated', { model: targetModel, instances: [createdModel] })
+                }
+              )
+            } else {
+              const createdModel = await targetModel.create(
+                foreignSequelizeInput,
+                { transaction }
+              )
 
-            await Promise.all(foreignResolvers.map(resolver => resolver(createdModel)))
+              await Promise.all(foreignResolvers.map(resolver => resolver(createdModel)))
 
-            // remember creations to set it all at once
-            foreignCreations.push(createdModel)
+              // remember creations to set it all at once
+              foreignCreations.push(createdModel)
+            }
           }
         }
 
@@ -94,7 +111,6 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
                 }
               }
 
-              // TODO : if its a one to many, old referenced one has changed
               pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
               const result = await instance[model.associations[targetModelName].accessors[method]]([
                 ...foreignIds,
@@ -156,18 +172,34 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
             ofType,
             { nameFormatter, logger, pubSub, transaction }
           )
-          const createdModel = await targetModel.create(
-            foreignSequelizeInput,
-            { transaction }
-          )
+          if (model.associations[targetModelName].associationType === 'HasOne' &&
+              !model.associations[targetModelName].target.rawAttributes[targetKey].allowNull) {
+            resolvers.push(
+              async (instance) => {
+                const createdModel = await targetModel.create(
+                  {
+                    ...foreignSequelizeInput,
+                    [foreignKey]: instance[targetKey]
+                  },
+                  { transaction }
+                )
+                pubSub?.publish('modelsCreated', { model: targetModel, instances: [createdModel] })
+              }
+            )
+          } else {
+            const createdModel = await targetModel.create(
+              foreignSequelizeInput,
+              { transaction }
+            )
 
-          await Promise.all(foreignResolvers.map((fr) => fr(createdModel)))
-          pubSub?.publish('modelsCreated', {
-            model: targetModel,
-            instances: [createdModel]
-          })
+            await Promise.all(foreignResolvers.map((fr) => fr(createdModel)))
+            pubSub?.publish('modelsCreated', {
+              model: targetModel,
+              instances: [createdModel]
+            })
 
-          sequelizeInput[foreignKey] = createdModel[targetKey]
+            sequelizeInput[foreignKey] = createdModel[targetKey]
+          }
         }
       }
     } else {
@@ -220,8 +252,16 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
 
     for (const field of resolvedSelections) {
       const { dissociate } = parseGraphQLArgs(field.arguments, variables)
+      const fieldName = nameFormatter.fieldNameToModelName(field.name.value)
 
       if (dissociate) {
+        // we have to query needed foreignKey
+        if (['BelongsTo', 'BelongsToMany'].includes(model.associations[fieldName].associationType)) {
+          const targetKey = getTargetKey(model.associations[fieldName])
+          if (!attributes.includes(targetKey)) {
+            attributes.push(targetKey)
+          }
+        }
         continue
       }
 
@@ -236,7 +276,6 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
         })
       }
 
-      const fieldName = nameFormatter.fieldNameToModelName(field.name.value)
       logger.log('getNestedElements', {
         fieldName,
         'field.name.value': field.name.value,
@@ -341,6 +380,10 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
     attributes
   })
   logger.outdent()
+
+  if (!attributes.length) {
+    attributes.push(model.primaryKeyAttribute)
+  }
 
   return { includes, attributes }
 }

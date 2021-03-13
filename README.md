@@ -2,7 +2,7 @@
 
 This project is an experimental work that aims to build a complete GraphQL schema for CRUD operations, on top of [graphql-sequelize](https://github.com/mickhansen/graphql-sequelize).
 
-The `sequelizeGraphQLSchemaBuilder` builds queries, mutations, subscriptions and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries and mutations are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
+The `sequelizeGraphQLSchemaBuilder` builds queries, mutations, subscriptions and types needed to build a complete GraphQL API according to your Sequelize models and associations. Generated queries, mutations and subscriptions are able to resolve nested associations, so the GraphQL schema is tight to the Sequelize schema.
 
 ## Installation
 
