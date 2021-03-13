@@ -75,6 +75,7 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
                     },
                     { transaction }
                   )
+                  await Promise.all(foreignResolvers.map(resolver => resolver(createdModel)))
                   pubSub?.publish('modelsCreated', { model: targetModel, instances: [createdModel] })
                 }
               )
@@ -155,9 +156,28 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
           if (model.associations[targetModelName].associationType === 'HasOne') {
             resolvers.push(
               async (instance) => {
-                console.log('retrieving', targetModel.name, key, targetKey, input[key][targetKey])
                 const target = await targetModel.findByPk(input[key][targetKey], { transaction })
-                await instance[model.associations[targetModelName].accessors.set](target)
+                if (!target) {
+                  throw Error(`${targetModelName} ${input[key][targetKey]} does not exists`)
+                }
+                const oldReferenced = await target[targetModel.associations[model.name].accessors.get]({ transaction })
+                if (oldReferenced) {
+                  pubSub?.publish('modelsUpdated', {
+                    model,
+                    instances: [oldReferenced]
+                  })
+                }
+
+                const oldTarget = await instance[model.associations[targetModelName].accessors.get]({ transaction })
+                if (oldTarget) {
+                  await oldTarget.destroy({ transaction })
+                  pubSub?.publish('modelsDeleted', {
+                    model: targetModel,
+                    ids: [target[targetModel.primaryKeyAttribute]]
+                  })
+                }
+                target[targetKey] = instance[foreignKey]
+                await target.save({ transaction })
                 pubSub?.publish('modelsUpdated', {
                   model: targetModel,
                   instances: [target]
@@ -194,6 +214,7 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
                   },
                   { transaction }
                 )
+                await Promise.all(foreignResolvers.map((fr) => fr(createdModel)))
                 pubSub?.publish('modelsCreated', { model: targetModel, instances: [createdModel] })
               }
             )
