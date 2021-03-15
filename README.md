@@ -625,11 +625,11 @@ type CountryID {
 
 The `CountryID` type is the `Country` type, reduced to the only field we are sure to know after deletion : the primary key.
 
-For subscriptions to work, you must [provide a `pubSub`](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/subscriptions/src/server.js) entry to the GraphQL context.
+For subscriptions to work, you must [provide a `pubSub`](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/master/src/server.js) entry to the GraphQL context.
 
 Warning : the cascading delete / set null is not handled yet, and will not trigger publications.
 
-See the [the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/subscriptions) for testing purpose. Subscritions are tested with jest. Example :
+See the [the example](https://github.com/molaux/sequelize-graphql-schema-builder-example) for testing purpose. Subscritions are tested with jest. Example :
 
 ```gql
 mutation {
@@ -879,7 +879,7 @@ A prefix for generated queries and types.
 
 A callback that lets you add custom fields to Sequelize models types. It will be called each time a GraphQL model type is built. The resulting object will be merged with model's GraphQL type fields.
 
-[In this simple example (it's in the `extra-fields` branch)](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/extra-fields/src/schema/country/index.js), we use this hook to inject rich country infos coming from [restcountries.eu](https://restcountries.eu) to our `Country` GraphQL type. 
+[In the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/blob/master/src/schema/country/index.js), we use this hook to inject rich country infos coming from [restcountries.eu](https://restcountries.eu) to our `Country` GraphQL type. 
 
 ```gql
 type Country {
