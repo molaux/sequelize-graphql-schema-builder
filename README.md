@@ -629,7 +629,233 @@ For subscriptions to work, you must [provide a `pubSub`](https://github.com/mola
 
 Warning : the cascading delete / set null is not handled yet, and will not trigger publications.
 
-See the [`subscriptions` branch of the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/subscriptions) for testing purpose.
+See the [the example](https://github.com/molaux/sequelize-graphql-schema-builder-example/tree/subscriptions) for testing purpose. Subscritions are tested with jest. Example :
+
+```gql
+mutation {
+  createFilm(input: {
+    title: "initial title"
+    # a new language
+    Language: { 
+    	name: "initial language"
+      Films: [{
+        title: "New Film"
+      }]
+  	}
+    # new one to one
+    FilmText: {
+      title: "B"
+      description: "autre"
+    }
+    # an existing language
+    OriginalLanguage: { 
+      languageId: 1
+    }
+    Categories: [
+      # a new Category
+      { 
+        name: "initial new category"
+      }
+      # an existing Category
+      {
+        categoryId: 14
+      }
+      # a new Category
+      { 
+        name: "initial other category"
+        # we can create other nested creations / associations as well
+      }
+    ]
+  }, atomic: true) {
+    filmId
+    title
+    FilmText {
+      filmId
+      title
+    }
+    Categories {
+      categoryId
+      name
+    }
+    Language {
+      languageId
+      name
+    }
+    OriginalLanguage {
+      languageId
+      name
+    }
+  }
+}
+```
+
+The above mutation will trigger following publications to subscribtors :
+```json
+{
+  "data": {
+    "updatedCategory": [
+      {
+        "categoryId": "14",
+        "name": "Sci-Fi",
+        "Films": [
+          {
+            "filmId": "1002",
+            "title": "initial title"
+          },
+          {
+            "filmId": "985",
+            "title": "WONDERLAND CHRISTMAS"
+          },
+          {
+            "filmId": "972",
+            "title": "WHISPERER GIANT"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "createdCategory": [
+      {
+        "categoryId": "17",
+        "name": "initial new category",
+        "Films": [
+          {
+            "filmId": "1002",
+            "title": "initial title"
+          }
+        ]
+      },
+      {
+        "categoryId": "18",
+        "name": "initial other category",
+        "Films": [
+          {
+            "filmId": "1002",
+            "title": "initial title"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "createdFilm": [
+      {
+        "filmId": "1001",
+        "title": "New Film",
+        "Categories": [],
+        "Language": {
+          "languageId": "7",
+          "name": "initial language"
+        }
+      },
+      {
+        "filmId": "1002",
+        "title": "initial title",
+        "Categories": [
+          {
+            "categoryId": "14",
+            "name": "Sci-Fi"
+          },
+          {
+            "categoryId": "17",
+            "name": "initial new category"
+          },
+          {
+            "categoryId": "18",
+            "name": "initial other category"
+          }
+        ],
+        "Language": {
+          "languageId": "7",
+          "name": "initial language"
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "createdFilmText": [
+      {
+        "filmId": "1002",
+        "title": "B",
+        "Film": {
+          "filmId": "1002"
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "updatedLanguage": [
+      {
+        "languageId": "1",
+        "name": "English",
+        "Films": [
+          {
+            "filmId": "1000",
+            "title": "ZORRO ARK"
+          },
+          {
+            "filmId": "999",
+            "title": "ZOOLANDER FICTION"
+          },
+          {
+            "filmId": "998",
+            "title": "ZHIVAGO CORE"
+          }
+        ],
+        "OriginalLanguageFilms": [
+          {
+            "filmId": "1002",
+            "title": "initial title"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "data": {
+    "createdLanguage": [
+      {
+        "languageId": "7",
+        "name": "initial language",
+        "Films": [
+          {
+            "title": "New Film"
+          },
+          {
+            "title": "initial title"
+          }
+        ],
+        "OriginalLanguageFilms": []
+      }
+    ]
+  }
+}
+```
 
 ## API
 
