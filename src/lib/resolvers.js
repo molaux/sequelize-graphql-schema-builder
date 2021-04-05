@@ -137,8 +137,10 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
             return [targetModel.sequelize.fn('AVG', targetModel.sequelize.col(attribute)), attribute]
           }
         }
-        throw new Error('group attr inconsistancy, should not happen')
+        // throw new Error('group attr inconsistancy, should not happen')
+        return null
       })
+        .filter(attr => attr !== null)
 
       findOptions.group = Array.isArray(query.group[0])
         ? query.group.map(group => [group[0]])

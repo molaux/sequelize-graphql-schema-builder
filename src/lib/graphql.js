@@ -82,7 +82,9 @@ const getRequestedAttributes = (model, fieldNode, logger, map) => {
 }
 
 const parseGraphQLArgs = (arg, variables) => {
-  if (Array.isArray(arg)) {
+  if (arg === undefined) {
+    return {}
+  } else if (Array.isArray(arg)) {
     return arg.filter(arg => ['Argument', 'ObjectField'].includes(arg.kind)).reduce((o, arg) => {
       o[arg.name.value] = parseGraphQLArgs(arg.value, variables)
       return o
