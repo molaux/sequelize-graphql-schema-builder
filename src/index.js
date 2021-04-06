@@ -20,7 +20,8 @@ const {
 } = require('./lib/graphql.js')
 
 const {
-  findOptionsMerger
+  findOptionsMerger,
+  resolveFragments
 } = require('./lib/sequelize.js')
 
 const {
@@ -173,5 +174,6 @@ module.exports = {
   nameFormatterFactory,
   loggerFactory,
   beforeModelResolverFactory,
-  beforeAssociationResolverFactory
+  beforeAssociationResolverFactory,
+  resolveFragments
 }

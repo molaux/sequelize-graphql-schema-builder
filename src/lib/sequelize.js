@@ -252,6 +252,22 @@ const getPrimaryKeyType = (model, cache) => {
   throw Error(`Primary key not found for ${model.name}`)
 }
 
+const resolveFragments = (selections, infos) => {
+  const resolvedSelections = selections
+  for (const field of selections) {
+    // Resolve fragments selection
+    if (field.kind === 'FragmentSpread') {
+      const fragmentName = field.name.value
+      const fragment = infos.fragments[fragmentName]
+
+      if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
+        resolvedSelections.push(...fragment.selectionSet.selections)
+      }
+    }
+  }
+  return resolvedSelections
+}
+
 const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
   logger.indent()
   const includes = []
@@ -262,7 +278,7 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
   logger.log('getNestedElements', { start: model.name })
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
     // is there fragments in that selectionSet ?
-    const resolvedSelections = fieldNode.selectionSet.selections
+    const resolvedSelections = resolveFragments(fieldNode.selectionSet.selections, infos)
     for (const field of fieldNode.selectionSet.selections) {
       // Resolve fragments selection
       if (field.kind === 'FragmentSpread') {
@@ -449,5 +465,6 @@ module.exports = {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,
-  findOptionsMerger
+  findOptionsMerger,
+  resolveFragments
 }
