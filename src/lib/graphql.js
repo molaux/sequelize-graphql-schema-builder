@@ -107,15 +107,12 @@ const resolveFragments = (selections, infos) => {
   for (const field of selections) {
     // Resolve fragments selection
     if (field.kind === 'FragmentSpread') {
-      console.log('resolveFragments', field, resolvedSelections)
-      console.log('FragmentSpread', { infos })
       const fragmentName = field.name.value
       const fragment = infos.fragments[fragmentName]
 
       if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
         resolvedSelections.push(...fragment.selectionSet.selections)
       }
-      console.log('resolveFragments::resolved', field, resolvedSelections)
     }
   }
   return resolvedSelections
