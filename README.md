@@ -949,7 +949,7 @@ Limits the number of "parallel" resulting left joins. Default is 3.
 
 Prints debug infos. 
 
-### `getRequestedAttributes(model, fieldNode, logger, map)`
+### `getRequestedAttributes(model, fieldNode, infos, logger, map)`
 
 To be documented...
 

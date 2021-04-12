@@ -53,8 +53,8 @@ const mapAttributes = (model, { fieldNodes }) => {
   return requestedAttributes.filter(attribute => columns.has(attribute))
 }
 
-const getRequestedAttributes = (model, fieldNode, logger, map) => {
-  logger.indent()
+const getRequestedAttributes = (model, fieldNode, infos, logger, map) => {
+  logger?.indent()
   const attributes = []
   const fieldMap = map
     ? k => map[k] || k
@@ -62,7 +62,9 @@ const getRequestedAttributes = (model, fieldNode, logger, map) => {
   const columns = new Set(Object.keys(model.rawAttributes))
 
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
-    for (const field of fieldNode.selectionSet.selections) {
+    const resolvedSelections = resolveFragments(fieldNode.selectionSet.selections, infos)
+
+    for (const field of resolvedSelections) {
       const fieldName = fieldMap(field.name.value)
       // logger.log('getRequestedAttributes', {
       //   field,
@@ -77,7 +79,7 @@ const getRequestedAttributes = (model, fieldNode, logger, map) => {
       }
     }
   }
-  logger.outdent()
+  logger?.outdent()
   return attributes
 }
 
@@ -100,10 +102,30 @@ const parseGraphQLArgs = (arg, variables) => {
   }
 }
 
+const resolveFragments = (selections, infos) => {
+  const resolvedSelections = selections
+  for (const field of selections) {
+    // Resolve fragments selection
+    if (field.kind === 'FragmentSpread') {
+      console.log('resolveFragments', field, resolvedSelections)
+      console.log('FragmentSpread', { infos })
+      const fragmentName = field.name.value
+      const fragment = infos.fragments[fragmentName]
+
+      if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
+        resolvedSelections.push(...fragment.selectionSet.selections)
+      }
+      console.log('resolveFragments::resolved', field, resolvedSelections)
+    }
+  }
+  return resolvedSelections
+}
+
 module.exports = {
   getInsertInputFields,
   getUpdateInputFields,
   mapAttributes,
   getRequestedAttributes,
-  parseGraphQLArgs
+  parseGraphQLArgs,
+  resolveFragments
 }

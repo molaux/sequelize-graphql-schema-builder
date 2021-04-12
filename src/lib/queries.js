@@ -17,7 +17,7 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
     before: async ({ attributes, ...otherFindOptions }, args, ctx, infos, ...rest) => {
       const findOptions = await beforeResolverFactory(model, { nameFormatter, logger, maxManyAssociations })({
         ...otherFindOptions,
-        attributes: getRequestedAttributes(model, infos.fieldNodes[0], logger)
+        attributes: getRequestedAttributes(model, infos.fieldNodes[0], infos, logger)
       }, args, ctx, infos, ...rest)
 
       return findOptions

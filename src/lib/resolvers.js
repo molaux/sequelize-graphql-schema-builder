@@ -16,7 +16,7 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
 
   findOptions.attributes = [
     ...findOptions.extraAttributes || [],
-    ...getRequestedAttributes(targetModel, infos.fieldNodes[0], logger)
+    ...getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
   ]
   const {
     includes: nestedIncludes,
@@ -121,7 +121,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
     // Manage the group clause
     if (query.group !== undefined && Array.isArray(query.group) && query.group.length) {
       findOptions.order = query.group
-      const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], logger)
+      const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
       findOptions.attributes = findOptions.attributes.map(attribute => {
         if (query.group.includes(attribute)) {
           // if attr is grouped against, return as is

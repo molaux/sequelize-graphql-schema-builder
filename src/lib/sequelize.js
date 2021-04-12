@@ -2,7 +2,7 @@ const deepmerge = require('deepmerge')
 const { attributeFields } = require('graphql-sequelize')
 const { GraphQLList, GraphQLNonNull } = require('graphql')
 const { InputModelIDType } = require('./InputModelIDType')
-const { getRequestedAttributes, parseGraphQLArgs } = require('./graphql')
+const { getRequestedAttributes, parseGraphQLArgs, resolveFragments } = require('./graphql')
 const { getFieldQuery } = require('./query')
 
 const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
@@ -252,22 +252,6 @@ const getPrimaryKeyType = (model, cache) => {
   throw Error(`Primary key not found for ${model.name}`)
 }
 
-const resolveFragments = (selections, infos) => {
-  const resolvedSelections = selections
-  for (const field of selections) {
-    // Resolve fragments selection
-    if (field.kind === 'FragmentSpread') {
-      const fragmentName = field.name.value
-      const fragment = infos.fragments[fragmentName]
-
-      if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
-        resolvedSelections.push(...fragment.selectionSet.selections)
-      }
-    }
-  }
-  return resolvedSelections
-}
-
 const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
   logger.indent()
   const includes = []
@@ -279,23 +263,6 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
   if (fieldNode.selectionSet !== undefined && fieldNode.selectionSet.selections !== undefined) {
     // is there fragments in that selectionSet ?
     const resolvedSelections = resolveFragments(fieldNode.selectionSet.selections, infos)
-    for (const field of fieldNode.selectionSet.selections) {
-      // Resolve fragments selection
-      if (field.kind === 'FragmentSpread') {
-        const fragmentName = field.name.value
-        const fragment = infos.fragments[fragmentName]
-
-        logger.log('getNestedElements', {
-          isFragment: true,
-          fragmentName,
-          fragment
-        })
-
-        if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
-          resolvedSelections.push(...fragment.selectionSet.selections)
-        }
-      }
-    }
 
     for (const field of resolvedSelections) {
       const { dissociate } = parseGraphQLArgs(field.arguments, variables)
@@ -312,17 +279,6 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
         continue
       }
 
-      if (field.kind === 'FragmentSpread') {
-        const fragmentName = field.name.value
-        const fragment = infos.fragments[fragmentName]
-
-        logger.log('getNestedElements', {
-          isFragment: true,
-          fragmentName,
-          fragment
-        })
-      }
-
       logger.log('getNestedElements', {
         fieldName,
         'field.name.value': field.name.value,
@@ -334,7 +290,7 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
         let include = {
           model: model.associations[fieldName].target,
           as: model.associations[fieldName].as,
-          attributes: getRequestedAttributes(model.associations[fieldName].target, field, logger)
+          attributes: getRequestedAttributes(model.associations[fieldName].target, field, infos, logger)
         }
         logger.log('getNestedElements', {
           fieldName,
@@ -465,6 +421,5 @@ module.exports = {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,
-  findOptionsMerger,
-  resolveFragments
+  findOptionsMerger
 }

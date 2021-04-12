@@ -16,12 +16,12 @@ const {
 } = require('./lib/logger.js')
 
 const {
-  getRequestedAttributes
+  getRequestedAttributes,
+  resolveFragments
 } = require('./lib/graphql.js')
 
 const {
-  findOptionsMerger,
-  resolveFragments
+  findOptionsMerger
 } = require('./lib/sequelize.js')
 
 const {
