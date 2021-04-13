@@ -142,15 +142,26 @@ module.exports = {
       })
     })
 
+    const modelValidatorType = new GraphQLObjectType({
+      name: nameFormatter.formatValidatorTypeName(model.name),
+      description: `Represents ${model.name} fields validators`,
+      fields: () => Object.keys(model.rawAttributes).reduce((o, attribute) => ({
+        ...o,
+        [attribute]: { type: GraphQLJSON }
+      }), {})
+    })
+
     // keep a trace of models to reuse in associations
     return {
       modelTypes: {
         [nameFormatter.formatTypeName(model.name)]: modelType,
         [`${nameFormatter.formatTypeName(model.name)}ID`]: modelIDType,
         [nameFormatter.formatInsertInputTypeName(model.name)]: modelInsertInputType,
-        [nameFormatter.formatUpdateInputTypeName(model.name)]: modelUpdateInputType
+        [nameFormatter.formatUpdateInputTypeName(model.name)]: modelUpdateInputType,
+        [nameFormatter.formatValidatorTypeName(model.name)]: modelValidatorType
       },
       modelType,
+      modelValidatorType,
       modelIDType,
       modelInsertInputType,
       modelUpdateInputType

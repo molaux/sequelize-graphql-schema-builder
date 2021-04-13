@@ -26,7 +26,7 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
 
 module.exports = {
   manyResolverFactory,
-  builder: (model, modelType, manyResolver, { nameFormatter }) => {
+  builder: (model, modelType, modelValidatorType, manyResolver, { nameFormatter }) => {
     const manyQueryName = nameFormatter.formatManyQueryName(model.name)
     return {
       [manyQueryName]: {
@@ -36,6 +36,15 @@ module.exports = {
           query: { type: GraphQLJSON }
         },
         resolve: manyResolver
+      },
+      [nameFormatter.formatModelValidatorQueryName(model.name)]: {
+        type: modelValidatorType,
+        resolve: () => {
+          return Object.keys(model.rawAttributes).reduce((o, attribute) => ({
+            ...o,
+            [attribute]: model.rawAttributes[attribute].validator || null
+          }), {})
+        }
       }
     }
   }
