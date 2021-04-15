@@ -42,7 +42,7 @@ module.exports = {
             if (transaction) {
               await transaction.commit()
             }
-            accumulatorPubSub?.flushTo(pubSub)
+            accumulatorPubSub?.flushTo(pubSub, ctx)
 
             return models
           } catch (error) {
@@ -83,7 +83,7 @@ module.exports = {
               await transaction.commit()
             }
 
-            accumulatorPubSub?.flushTo(pubSub)
+            accumulatorPubSub?.flushTo(pubSub, ctx)
 
             return manyResolver(parent, {
               query: {
@@ -198,7 +198,7 @@ module.exports = {
               await transaction.commit()
             }
 
-            accumulatorPubSub?.flushTo(pubSub)
+            accumulatorPubSub?.flushTo(pubSub, ctx)
 
             return manyResolver(parent, { query }, { pubSub, ...ctx }, ...rest)
           } catch (error) {

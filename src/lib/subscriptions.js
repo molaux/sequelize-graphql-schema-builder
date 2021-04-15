@@ -7,9 +7,10 @@ const AccumulatorPubSub = function () {
     publish: (event, payload) => {
       this.register.push({ event, payload })
     },
-    flushTo: (pubSub) => {
+    flushTo: (pubSub, ctx) => {
       const payloads = {}
       for (const { event, payload } of this.register) {
+        payload.emitterContext = ctx
         if (!payloads[event]) {
           payloads[event] = []
         }
@@ -22,9 +23,10 @@ const AccumulatorPubSub = function () {
   }
 }
 
-const payloadsReducer = (model, payloads) => Array.from(payloads
+const payloadsReducer = (model, payloads, context, contextFilter) => Array.from(payloads
   // filter payloads by model
-  .filter(({ model: { name: payloadModelName } }) => payloadModelName === model.name)
+  .filter(({ model: { name: payloadModelName }, emitterContext }) => payloadModelName === model.name &&
+    (!contextFilter || contextFilter(emitterContext, context)))
   // resolve instances
   .map(({ ids, instances }) => ([
     ...ids ?? [],
@@ -34,7 +36,7 @@ const payloadsReducer = (model, payloads) => Array.from(payloads
   .reduce((set, ids) => ids.reduce((set, id) => set.add(id), set), new Set())
   .values())
 
-const instancesResolverFactory = (model, manyResolver) => (payloads, args, ...rest) => {
+const instancesResolverFactory = (model, manyResolver, contextFilter) => (payloads, args, context, ...rest) => {
   if (payloads.length) {
     return manyResolver(
       null,
@@ -42,21 +44,23 @@ const instancesResolverFactory = (model, manyResolver) => (payloads, args, ...re
         query: {
           where: {
             [model.primaryKeyAttribute]: {
-              _inOp: payloadsReducer(model, payloads)
+              _inOp: payloadsReducer(model, payloads, context, contextFilter)
             }
           }
         }
       },
+      context,
       ...rest)
   } else {
     return []
   }
 }
 
-const subscribeToModelInstancesFactory = (model, action) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
+const subscribeToModelInstancesFactory = (model, action, contextFilter) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
   () => pubSub.asyncIterator(action),
   (payloads) => payloads.reduce(
-    (keep, { model: { name: payloadModelName } }) => keep || payloadModelName === model.name,
+    (keep, { model: { name: payloadModelName }, emitterContext }) => (keep || payloadModelName === model.name) &&
+      (!contextFilter || contextFilter(emitterContext, ctx)),
     false
   )
 )(payload, args, { pubSub, ...ctx }, ...rest)
@@ -66,7 +70,7 @@ module.exports = {
   payloadsReducer,
   instancesResolverFactory,
   subscribeToModelInstancesFactory,
-  builder: (model, modelType, modelIDType, manyResolver, { nameFormatter }) => {
+  builder: (model, modelType, modelIDType, manyResolver, { nameFormatter, contextFilter }) => {
     const createdModelSubscriptionName = nameFormatter.formatCreatedSubscriptionName(model.name)
     const updatedModelSubscriptionName = nameFormatter.formatUpdatedSubscriptionName(model.name)
     const deletedModelSubscriptionName = nameFormatter.formatDeletedSubscriptionName(model.name)
@@ -74,20 +78,20 @@ module.exports = {
     return {
       [createdModelSubscriptionName]: {
         type: new GraphQLList(modelType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated'),
-        resolve: instancesResolverFactory(model, manyResolver)
+        subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated', contextFilter),
+        resolve: instancesResolverFactory(model, manyResolver, contextFilter)
       },
 
       [updatedModelSubscriptionName]: {
         type: new GraphQLList(modelType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated'),
-        resolve: instancesResolverFactory(model, manyResolver)
+        subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated', contextFilter),
+        resolve: instancesResolverFactory(model, manyResolver, contextFilter)
       },
 
       [deletedModelSubscriptionName]: {
         type: new GraphQLList(modelIDType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted'),
-        resolve: (payloads) => payloadsReducer(model, payloads).map((id) => ({ [model.primaryKeyAttribute]: id }))
+        subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted', contextFilter),
+        resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter).map((id) => ({ [model.primaryKeyAttribute]: id }))
       }
     }
   }

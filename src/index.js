@@ -61,7 +61,8 @@ const schemaBuilder = (sequelize, options) => {
     debug,
     maxManyAssociations,
     extraModelMutations,
-    nameFormatter: defaultNameFormatter
+    nameFormatter: defaultNameFormatter,
+    subscriptionsContextFilter
   } = Object.assign({}, {
     namespace: '',
     extraModelTypes: () => ({}),
@@ -70,7 +71,8 @@ const schemaBuilder = (sequelize, options) => {
     extraModelMutations: () => ({}),
     debug: false,
     maxManyAssociations: 3,
-    nameFormatter: null
+    nameFormatter: null,
+    subscriptionsContextFilter: () => true
   }, options)
 
   const modelsTypes = {}
@@ -133,7 +135,7 @@ const schemaBuilder = (sequelize, options) => {
 
     subscriptions = {
       ...subscriptions,
-      ...subscriptionsBuilder(model, modelType, modelIDType, manyResolver, { nameFormatter })
+      ...subscriptionsBuilder(model, modelType, modelIDType, manyResolver, { nameFormatter, contextFilter: subscriptionsContextFilter })
     }
   }
 

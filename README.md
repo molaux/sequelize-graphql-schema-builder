@@ -866,6 +866,7 @@ schemaBuilder(sequelize, {
   extraModelFields: () => ({}),
   extraModelQueries: () => ({}),
   extraModelTypes: () => ({}),
+  subscriptionsContextFilter: (emitterContext, context) => true
   maxManyAssociations: 3,
   debug: false
 })
@@ -941,7 +942,18 @@ A callback that lets you add custom types depending on generated Sequelize model
 
 To be documented...
 
-### `maxManyAssociations`
+#### `subscriptionsContextFilter(emitterContext, context)`
+
+A filter passed to subcriptions `subscribe` and `resolve` methods in order to filter events based on emitter and subscriber context.
+
+Example to not resend events to initiator of mutation (given that that client provides a uuid header and server handles this to context) :
+
+```javascript
+ { 
+   subscriptionsContextFilter: (emitterContext, context) => emitterContext.user.uuid !== context.user.uuid
+ }
+ ```
+#### `maxManyAssociations`
 
 Limits the number of "parallel" resulting left joins. Default is 3. 
 
