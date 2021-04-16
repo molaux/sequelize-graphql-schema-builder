@@ -11,12 +11,21 @@ const { AccumulatorPubSub } = require('./subscriptions')
 const { inputResolver } = require('./sequelize')
 
 module.exports = {
-  builder: (model, modelType, modelInsertInputType, modelUpdateInputType, manyResolver, sequelize, { nameFormatter, logger }) => {
+  builder: (model, modelType, modelInsertInputType, modelUpdateInputType, inputModelIDTypes, manyResolver, sequelize, { nameFormatter, logger }) => {
     const deleteMutationName = nameFormatter.formatDeleteMutationName(model.name)
     const insertMutationName = nameFormatter.formatInsertMutationName(model.name)
     const updateMutationName = nameFormatter.formatUpdateMutationName(model.name)
+    const mockMutationName = nameFormatter.formatMockMutationName(model.name)
 
     return {
+      [mockMutationName]: {
+        type: modelType,
+        args: inputModelIDTypes.reduce((args, type) => ({
+          ...args,
+          [type.name]: { type }
+        }), {}),
+        resolve: () => null
+      },
       [deleteMutationName]: {
         type: new GraphQLList(modelType),
         args: {

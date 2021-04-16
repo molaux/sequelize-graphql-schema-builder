@@ -14,13 +14,14 @@ const nameFormatterFactory = namespace => ({
   formatModelNameAsField: function (modelName) { return modelName },
   formatTypeName: function (type) { return this.formatModelName(type) },
   formatValidatorTypeName: function (type) { return `${this.formatModelName(type)}Validator` },
-  formatInsertInputTypeName: function (type) { return `${this.formatModelName(type)}CreateInput` },
+  formatInsertInputTypeName: function (type, throughType) { return `${this.formatModelName(type)}CreateInput${throughType ? `Through${this.formatModelName(throughType)}` : ''}` },
   formatUpdateInputTypeName: function (type) { return `${this.formatModelName(type)}UpdateInput` },
   formatQueryName: function (modelName) { return this.formatModelName(modelName) },
   formatModelValidatorQueryName: function (type) { return `${this.formatModelName(type)}Validator` },
   formatInsertMutationName: function (modelName) { return `create${this.formatModelName(modelName)}` },
   formatDeleteMutationName: function (modelName) { return `delete${this.formatModelName(modelName)}` },
   formatUpdateMutationName: function (modelName) { return `update${this.formatModelName(modelName)}` },
+  formatMockMutationName: function (modelName) { return `mock${this.formatModelName(modelName)}` },
   formatManyQueryName: function (modelName) {
     const formattedQueryName = this.formatQueryName(modelName)
     const manyFormattedQueryName = pluralize(formattedQueryName)

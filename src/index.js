@@ -94,8 +94,18 @@ const schemaBuilder = (sequelize, options) => {
       modelValidatorType,
       modelIDType,
       modelInsertInputType,
-      modelUpdateInputType
+      modelUpdateInputType,
+      ghostTypes
     } = typesBuilder(model, modelsTypes, typesCache, extraModelFields, { nameFormatter, logger, maxManyAssociations })
+
+    // Union type does not expose its sub types, thus it is not included in schema, we have to force it
+    for (const ghostType of ghostTypes) {
+      if (typesNameSet.has(ghostType.name)) {
+        continue
+      }
+      modelsTypes[ghostType.name] = ghostType
+      typesNameSet.add(ghostType.name)
+    }
 
     for (const modelTypeName in modelTypes) {
       const modelType = modelTypes[modelTypeName]
@@ -129,7 +139,7 @@ const schemaBuilder = (sequelize, options) => {
 
     mutations = {
       ...mutations,
-      ...mutationsBuilder(model, modelType, modelInsertInputType, modelUpdateInputType, manyResolver, sequelize, { nameFormatter, logger }),
+      ...mutationsBuilder(model, modelType, modelInsertInputType, modelUpdateInputType, ghostTypes, manyResolver, sequelize, { nameFormatter, logger }),
       ...extraModelMutations({ modelsTypes, nameFormatter, logger }, model, mutations)
     }
 

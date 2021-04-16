@@ -421,5 +421,6 @@ module.exports = {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,
-  findOptionsMerger
+  findOptionsMerger,
+  getTargetKey
 }

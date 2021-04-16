@@ -8,13 +8,14 @@ const getInsertInputFields = (model, { cache: typesCache, nameFormatter }) => {
     .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
 
   for (const attribute in attributes) {
-    const isID = model.rawAttributes[attribute].primaryKey || associationsFk.has(attribute)
+    const isID = model.rawAttributes[attribute].primaryKey
     const isNullable = model.rawAttributes[attribute].autoIncrement === true ||
       model.rawAttributes[attribute].defaultValue !== undefined ||
-      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name)) ||
-      associationsFk.has(attribute)
+      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name))
 
-    if (isID) {
+    if (associationsFk.has(attribute) && !isID) {
+      delete attributes[attribute]
+    } else if (isID) {
       attributes[attribute].type = isNullable
         ? GraphQLID
         : new GraphQLNonNull(GraphQLID)
@@ -33,8 +34,11 @@ const getUpdateInputFields = (model, { cache }) => {
     .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
 
   for (const attribute in attributes) {
-    const isID = model.rawAttributes[attribute].primaryKey || associationsFk.has(attribute)
-    if (isID) {
+    const isID = model.rawAttributes[attribute].primaryKey
+
+    if (associationsFk.has(attribute) && !isID) {
+      delete attributes[attribute]
+    } else if (isID) {
       attributes[attribute].type = GraphQLID
     } else if (attributes[attribute].type instanceof GraphQLNonNull) {
       attributes[attribute].type = attributes[attribute].type.ofType
