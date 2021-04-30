@@ -144,7 +144,6 @@ module.exports = {
                 removeInput[field] = input[rawField]
               }
             }
-
             const {
               sequelizeInput: sequelizeSetInput,
               resolvers: setResolvers

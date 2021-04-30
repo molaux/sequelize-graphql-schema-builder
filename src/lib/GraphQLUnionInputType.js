@@ -9,7 +9,7 @@ class GraphQLUnionInputType extends GraphQLScalarType {
 }
 
 const {
-  coerceValue,
+  coerceInputValue,
   valueFromAST
 } = require('graphql/utilities')
 
@@ -131,7 +131,7 @@ module.exports = {
             inputType = referenceTypes[type]
           }
         }
-        const errors = coerceValue(value, inputType).errors
+        const errors = coerceInputValue(value, inputType).errors
 
         if (!errors) {
           return value

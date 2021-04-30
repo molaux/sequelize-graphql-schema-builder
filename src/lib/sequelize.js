@@ -93,48 +93,46 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
           }
         }
 
-        if (foreignIds.length || foreignCreations.length) {
-          resolvers.push(
-            async (instance, method = 'set') => {
-              // is there dereferenced or existing associations ?
-              const dereferencedForeigns = []
-              const existingForeigns = []
-              if (pubSub && method === 'set') {
-                const associatedModels = await instance[model.associations[targetModelName].accessors.get]({ transaction })
-                for (const associatedModel of associatedModels) {
-                  if (!foreignIds.find((id) => id === associatedModel[targetKey])) {
-                    // foreigns does not include old associated model
-                    dereferencedForeigns.push(associatedModel)
-                  } else {
-                    // foreign was already present
-                    existingForeigns.push(associatedModel[targetKey])
-                  }
+        resolvers.push(
+          async (instance, method = 'set') => {
+            // is there dereferenced or existing associations ?
+            const dereferencedForeigns = []
+            const existingForeigns = []
+            if (pubSub && method === 'set') {
+              const associatedModels = await instance[model.associations[targetModelName].accessors.get]({ transaction })
+              for (const associatedModel of associatedModels) {
+                if (!foreignIds.find((id) => id === associatedModel[targetKey])) {
+                  // foreigns does not include old associated model
+                  dereferencedForeigns.push(associatedModel)
+                } else {
+                  // foreign was already present
+                  existingForeigns.push(associatedModel[targetKey])
                 }
               }
-
-              pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
-              const result = await instance[model.associations[targetModelName].accessors[method]]([
-                ...foreignIds,
-                ...foreignCreations
-              ], { transaction })
-
-              // publish foreign associations updates
-              const newForeigns = foreignIds.filter((id) => !existingForeigns.find((existingForeignId) => existingForeignId === id))
-              if (newForeigns.length || dereferencedForeigns.length) {
-                pubSub?.publish(
-                  'modelsUpdated',
-                  {
-                    model: targetModel,
-                    instances: dereferencedForeigns,
-                    ids: newForeigns
-                  }
-                )
-              }
-
-              return result
             }
-          )
-        }
+
+            pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
+            const result = await instance[model.associations[targetModelName].accessors[method]]([
+              ...foreignIds,
+              ...foreignCreations
+            ], { transaction })
+
+            // publish foreign associations updates
+            const newForeigns = foreignIds.filter((id) => !existingForeigns.find((existingForeignId) => existingForeignId === id))
+            if (newForeigns.length || dereferencedForeigns.length) {
+              pubSub?.publish(
+                'modelsUpdated',
+                {
+                  model: targetModel,
+                  instances: dereferencedForeigns,
+                  ids: newForeigns
+                }
+              )
+            }
+
+            return result
+          }
+        )
       } else {
         // many to one association
         const finalType = inputType.getFields()[key].type instanceof GraphQLNonNull

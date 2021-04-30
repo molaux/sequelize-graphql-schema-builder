@@ -127,7 +127,7 @@ module.exports = {
                   if (['BelongsToMany', 'HasOne'].includes(association.associationType)) {
                     return targetAssociation.target === model
                   }
-                  return getTargetKey(targetAssociation) === getTargetKey(association)
+                  return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
                 })[0].as
             )]))
         : new InputModelAssociationType(
@@ -140,7 +140,7 @@ module.exports = {
                   if (['BelongsToMany', 'HasOne'].includes(association.associationType)) {
                     return targetAssociation.target === model
                   }
-                  return getTargetKey(targetAssociation) === getTargetKey(association)
+                  return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
                 })[0].as
             )])
 
