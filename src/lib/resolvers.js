@@ -156,7 +156,16 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
         field.length === 2 &&
         ['ASC', 'DESC'].includes(field[1]), true)
     ) {
-      findOptions.order = query.order
+      let orderMap = []
+      for (const [fieldName, order] of query.order) {
+        if ((targetModel.rawAttributes[fieldName].type instanceof Sequelize.DataTypes.VIRTUAL) &&
+          targetModel.rawAttributes[fieldName].type.fields?.length) {
+          orderMap = orderMap.concat(targetModel.rawAttributes[fieldName].type.fields.map((field) => [field, order]))
+        } else {
+          orderMap.push([fieldName, order])
+        }
+      }
+      findOptions.order = orderMap
     }
 
     logger.log('beforeModelResolver', { query })
