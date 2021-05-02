@@ -158,10 +158,24 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
     ) {
       let orderMap = []
       for (const [fieldName, order] of query.order) {
-        if ((targetModel.rawAttributes[fieldName].type instanceof Sequelize.DataTypes.VIRTUAL) &&
+        if ((targetModel.rawAttributes[fieldName]?.type instanceof Sequelize.DataTypes.VIRTUAL) &&
           targetModel.rawAttributes[fieldName].type.fields?.length) {
+          // Virtual field
           orderMap = orderMap.concat(targetModel.rawAttributes[fieldName].type.fields.map((field) => [field, order]))
+        } else if (fieldName.indexOf('.') !== -1) {
+          const [associationLocalFieldName, associationFieldName] = fieldName.split('.')
+          if (associationLocalFieldName in targetModel.associations) {
+            const associatedModel = targetModel.associations[associationLocalFieldName].target
+            if ((associatedModel.rawAttributes[associationFieldName]?.type instanceof Sequelize.DataTypes.VIRTUAL) &&
+              associatedModel.rawAttributes[associationFieldName].type.fields?.length) {
+              orderMap = orderMap.concat(associatedModel.rawAttributes[associationFieldName].type.fields.map((field) => [{ model: associatedModel, as: targetModel.associations[associationLocalFieldName].as }, field, order]))
+            } else {
+              orderMap.push([fieldName, order])
+            }
+          }
+          // Association
         } else {
+          // Raw field
           orderMap.push([fieldName, order])
         }
       }
