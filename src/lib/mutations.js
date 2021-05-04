@@ -44,6 +44,22 @@ module.exports = {
             // TODO: consider foreigns oneToMany cascade set NULL or delete
             const models = await manyResolver(parent, { query, transaction }, { pubSub, ...ctx }, ...rest)
 
+            for (const targetModelName in model.associations) {
+              const targetModel = model.associations[targetModelName].target
+              const foreignInstances = await Promise.all(models.map((instance) => instance[model.associations[targetModelName].accessors.get]({ transaction })))
+              if (foreignInstances.length) {
+                accumulatorPubSub?.publish(
+                  'modelsUpdated',
+                  {
+                    model: targetModel,
+                    instances: ['HasMany', 'BelongsToMany'].includes(model.associations[targetModelName].associationType)
+                      ? foreignInstances.flat()
+                      : foreignInstances
+                  }
+                )
+              }
+            }
+
             await model.destroy({ where: cleanWhereQuery(model, query.where), transaction })
 
             accumulatorPubSub?.publish('modelsDeleted', { model, instances: models })

@@ -111,7 +111,9 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
               }
             }
 
-            pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
+            if (foreignCreations.length) {
+              pubSub?.publish('modelsCreated', { model: targetModel, instances: foreignCreations })
+            }
             const result = await instance[model.associations[targetModelName].accessors[method]]([
               ...foreignIds,
               ...foreignCreations
@@ -119,6 +121,7 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
 
             // publish foreign associations updates
             const newForeigns = foreignIds.filter((id) => !existingForeigns.find((existingForeignId) => existingForeignId === id))
+
             if (newForeigns.length || dereferencedForeigns.length) {
               pubSub?.publish(
                 'modelsUpdated',
