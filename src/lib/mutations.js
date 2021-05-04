@@ -47,14 +47,16 @@ module.exports = {
             for (const targetModelName in model.associations) {
               const targetModel = model.associations[targetModelName].target
               const foreignInstances = await Promise.all(models.map((instance) => instance[model.associations[targetModelName].accessors.get]({ transaction })))
-              if (foreignInstances.length) {
+              const flattenForeigns = (['HasMany', 'BelongsToMany'].includes(model.associations[targetModelName].associationType)
+                ? foreignInstances.flat()
+                : foreignInstances).filter((instance) => instance)
+
+              if (flattenForeigns.length) {
                 accumulatorPubSub?.publish(
                   'modelsUpdated',
                   {
                     model: targetModel,
-                    instances: ['HasMany', 'BelongsToMany'].includes(model.associations[targetModelName].associationType)
-                      ? foreignInstances.flat()
-                      : foreignInstances
+                    instances: flattenForeigns
                   }
                 )
               }
