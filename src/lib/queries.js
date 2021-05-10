@@ -30,6 +30,7 @@ module.exports = {
     const manyQueryName = nameFormatter.formatManyQueryName(model.name)
     return {
       [manyQueryName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         // The resolver will use `findOne` or `findAll` depending on whether the field it's used in is a `GraphQLList` or not.
         type: new GraphQLList(modelType),
         args: {
@@ -38,6 +39,7 @@ module.exports = {
         resolve: manyResolver
       },
       [nameFormatter.formatModelValidatorQueryName(model.name)]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: modelValidatorType,
         resolve: () => {
           return Object.keys(model.rawAttributes).reduce((o, attribute) => ({

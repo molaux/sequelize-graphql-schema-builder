@@ -77,18 +77,21 @@ module.exports = {
 
     return {
       [createdModelSubscriptionName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated', contextFilter),
         resolve: instancesResolverFactory(model, manyResolver, contextFilter)
       },
 
       [updatedModelSubscriptionName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated', contextFilter),
         resolve: instancesResolverFactory(model, manyResolver, contextFilter)
       },
 
       [deletedModelSubscriptionName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelIDType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted', contextFilter),
         resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter).map((id) => ({ [model.primaryKeyAttribute]: id }))

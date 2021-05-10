@@ -19,6 +19,7 @@ module.exports = {
 
     return {
       [mockMutationName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: modelType,
         args: inputModelIDTypes.reduce((args, type) => ({
           ...args,
@@ -27,6 +28,7 @@ module.exports = {
         resolve: () => null
       },
       [deleteMutationName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelType),
         args: {
           query: { type: GraphQLJSON },
@@ -82,6 +84,7 @@ module.exports = {
       },
 
       [insertMutationName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: modelType,
         args: {
           input: { type: modelInsertInputType },
@@ -129,6 +132,7 @@ module.exports = {
       },
 
       [updateMutationName]: {
+        namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelType),
         args: {
           query: { type: GraphQLJSON },
