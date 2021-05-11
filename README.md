@@ -253,13 +253,12 @@ type Film {
   rating: FilmratingEnumType
   specialFeatures: String
   lastUpdate: Date!
-  languageId: ID!
-  originalLanguageId: ID
   Inventories(query: JSON, dissociate: Boolean): [Inventory]
   Language(query: JSON, dissociate: Boolean): Language
   OriginalLanguage(query: JSON, dissociate: Boolean): Language
   Actors(query: JSON, dissociate: Boolean): [Actor]
   Categories(query: JSON, dissociate: Boolean): [Category]
+  FilmText(query: JSON, dissociate: Boolean): FilmText
 }
 ```
 
@@ -385,7 +384,7 @@ To be documented
 
 ## Mutations
 
-For input types, when possible, a fake `GraphQLUnionInputType` is used. It can be resolved either by a node embedding only its primary key (refering to an existing one), or any else that will be considered as a creation type :
+For input types, when possible, a fake `union type` is used (For example, here : `InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms`). It can be resolved either by a node embedding only its primary key (`InputLanguageByLanguageId` : refering to an existing one), or any else that will be considered as a creation type (`LanguageCreateInputThroughFilms`). The `LanguageCreateInputThroughFilms` is the `LanguageCreateInput` without the `Films` field : when you add a `Language` through a `Film` entity, you cannot add other `Films` to this new `Language` (at the present time).
 
 ```gql
 input FilmCreateInput {
@@ -400,23 +399,80 @@ input FilmCreateInput {
   rating: FilmratingEnumType
   specialFeatures: String
   lastUpdate: Date
-  languageId: ID
-  originalLanguageId: ID
-  Inventories: [InputInventoryAssociationByInventoryId]
-  Language: InputLanguageAssociationByLanguageId
-  OriginalLanguage: InputLanguageAssociationByLanguageId
-  Actors: [InputActorAssociationByActorId]
-  Categories: [InputCategoryAssociationByCategoryId]
+  Inventories: [InputInventoryByInventoryIdOrInventoryCreateInputThroughFilm]
+  Language: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms!
+  OriginalLanguage: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms
+  Actors: [InputActorByActorIdOrActorCreateInputThroughFilms]
+  Categories: [InputCategoryByCategoryIdOrCategoryCreateInputThroughFilms]
+  FilmText: InputFilmTextByFilmIdOrFilmTextCreateInputThroughFilm
 }
 
 input InputFilmByFilmId {
   filmId: ID
 }
 
-scalar InputFilmAssociationByFilmId
+scalar InputFilmByFilmIdOrFilmCreateInputThroughLanguage
+...
+
+input FilmCreateInputThroughLanguage {
+  filmId: ID
+  title: String!
+  description: String
+  releaseYear: Int
+  rentalDuration: Int
+  rentalRate: String
+  length: Int
+  replacementCost: String
+  rating: FilmratingEnumType
+  specialFeatures: String
+  lastUpdate: Date
+  Inventories: [InputInventoryByInventoryIdOrInventoryCreateInputThroughFilm]
+  OriginalLanguage: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms
+  Actors: [InputActorByActorIdOrActorCreateInputThroughFilms]
+  Categories: [InputCategoryByCategoryIdOrCategoryCreateInputThroughFilms]
+  FilmText: InputFilmTextByFilmIdOrFilmTextCreateInputThroughFilm
+}
+...
+
 ```
 
-`InputFilmAssociationByFilmId` can be a `FilmCreateInput` (an new film) or a `InputFilmByFilmId` (an existing film)
+GraphQL union input type is [under discussions](https://github.com/graphql/graphql-spec/pull/825) at the present time. Here it is simulated through a `SCALAR` type. It works well but the unioned types are not exposed in the schema. It can be tricky to debug when having type issues since GraphQL consider the SCALAR as final type. To workaround this problem, I use explicit naming (`InputInventoryByInventoryIdOrInventoryCreateInputThroughFilm`) and add _mock_ queries to expose hidden types :
+
+```gql
+mockFilm(
+    InputInventoryByInventoryId: InputInventoryByInventoryId
+    InputLanguageByLanguageId: InputLanguageByLanguageId
+    InputActorByActorId: InputActorByActorId
+    InputCategoryByCategoryId: InputCategoryByCategoryId
+    InputFilmTextByFilmId: InputFilmTextByFilmId
+    FilmCreateInputThroughInventories: FilmCreateInputThroughInventories
+    FilmCreateInputThroughLanguage: FilmCreateInputThroughLanguage
+    FilmCreateInputThroughOriginalLanguage: FilmCreateInputThroughOriginalLanguage
+    FilmCreateInputThroughActors: FilmCreateInputThroughActors
+    FilmCreateInputThroughCategories: FilmCreateInputThroughCategories
+    FilmCreateInputThroughFilmText: FilmCreateInputThroughFilmText
+  ): Film
+
+input FilmCreateInputThroughInventories {
+  filmId: ID
+  title: String!
+  description: String
+  releaseYear: Int
+  rentalDuration: Int
+  rentalRate: String
+  length: Int
+  replacementCost: String
+  rating: FilmratingEnumType
+  specialFeatures: String
+  lastUpdate: Date
+  Language: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms!
+  OriginalLanguage: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms
+  Actors: [InputActorByActorIdOrActorCreateInputThroughFilms]
+  Categories: [InputCategoryByCategoryIdOrCategoryCreateInputThroughFilms]
+  FilmText: InputFilmTextByFilmIdOrFilmTextCreateInputThroughFilm
+}
+...
+```
 
 An `atomic` boolean parameter is available for all mutations to enable/disable the use of transactions (default is `true`). When transactions are enabled (by default), if something goes wrong, transaction for whole mutation is rolled back and pending publications for subscriptions are canceled.
 
@@ -441,6 +497,11 @@ mutation {
     # an existing language
     OriginalLanguage: { 
       languageId: 2
+    }
+    # new one to one
+    FilmText: {
+      title: "FilmText title"
+      description: "FilmText description"
     }
     Categories: [
       # a new Category
@@ -479,26 +540,26 @@ The new ids are pulled in the response :
 {
   "data": {
     "createFilm": {
-      "filmId": 1001,
+      "filmId": "1001",
       "Categories": [
         {
           "categoryId": "14",
           "name": "Sci-Fi"
         },
         {
-          "categoryId": "149",
+          "categoryId": "17",
           "name": "New category"
         },
         {
-          "categoryId": "150",
+          "categoryId": "18",
           "name": "Other category"
         }
       ],
       "Language": {
-        "languageId": 10
+        "languageId": "7"
       },
       "OriginalLanguage": {
-        "languageId": 2
+        "languageId": "2"
       }
     }
   }
@@ -524,18 +585,17 @@ input FilmUpdateInput {
   rating: FilmratingEnumType
   specialFeatures: String
   lastUpdate: Date
-  languageId: ID
-  originalLanguageId: ID
-  Inventories: [InputInventoryAssociationByInventoryId]
-  addInventories: [InputInventoryAssociationByInventoryId]
-  Language: InputLanguageAssociationByLanguageId
-  OriginalLanguage: InputLanguageAssociationByLanguageId
-  Actors: [InputActorAssociationByActorId]
-  addActors: [InputActorAssociationByActorId]
+  Inventories: [InputInventoryByInventoryIdOrInventoryCreateInputThroughFilm]
+  addInventories: [InputInventoryByInventoryIdOrInventoryCreateInputThroughFilm]
+  Language: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms
+  OriginalLanguage: InputLanguageByLanguageIdOrLanguageCreateInputThroughFilms
+  Actors: [InputActorByActorIdOrActorCreateInputThroughFilms]
+  addActors: [InputActorByActorIdOrActorCreateInputThroughFilms]
   removeActors: [InputActorByActorId]
-  Categories: [InputCategoryAssociationByCategoryId]
-  addCategories: [InputCategoryAssociationByCategoryId]
+  Categories: [InputCategoryByCategoryIdOrCategoryCreateInputThroughFilms]
+  addCategories: [InputCategoryByCategoryIdOrCategoryCreateInputThroughFilms]
   removeCategories: [InputCategoryByCategoryId]
+  FilmText: InputFilmTextByFilmIdOrFilmTextCreateInputThroughFilm
 }
 
 type RootMutationType {
@@ -551,7 +611,7 @@ The only exception is obviously for `belongsToMany` associations removal that ca
 
 ```gql
 mutation {
-  updateFilm(query: { where: { filmId: 1011 } }, input: {
+  updateFilm(query: { where: { filmId: 1001 } }, input: {
     title: "Other title"
     Language: {
     	name: "Portuguese"
@@ -699,7 +759,7 @@ The above mutation will trigger following publications to subscribtors :
         "name": "Sci-Fi",
         "Films": [
           {
-            "filmId": "1002",
+            "filmId": "1001",
             "title": "initial title"
           },
           {
@@ -726,7 +786,7 @@ The above mutation will trigger following publications to subscribtors :
         "name": "initial new category",
         "Films": [
           {
-            "filmId": "1002",
+            "filmId": "1001",
             "title": "initial title"
           }
         ]
@@ -736,7 +796,7 @@ The above mutation will trigger following publications to subscribtors :
         "name": "initial other category",
         "Films": [
           {
-            "filmId": "1002",
+            "filmId": "1001",
             "title": "initial title"
           }
         ]
@@ -752,15 +812,6 @@ The above mutation will trigger following publications to subscribtors :
     "createdFilm": [
       {
         "filmId": "1001",
-        "title": "New Film",
-        "Categories": [],
-        "Language": {
-          "languageId": "7",
-          "name": "initial language"
-        }
-      },
-      {
-        "filmId": "1002",
         "title": "initial title",
         "Categories": [
           {
@@ -791,10 +842,10 @@ The above mutation will trigger following publications to subscribtors :
   "data": {
     "createdFilmText": [
       {
-        "filmId": "1002",
+        "filmId": "1001",
         "title": "B",
         "Film": {
-          "filmId": "1002"
+          "filmId": "1001"
         }
       }
     ]
@@ -825,7 +876,7 @@ The above mutation will trigger following publications to subscribtors :
         ],
         "OriginalLanguageFilms": [
           {
-            "filmId": "1002",
+            "filmId": "1001",
             "title": "initial title"
           }
         ]
@@ -844,9 +895,6 @@ The above mutation will trigger following publications to subscribtors :
         "name": "initial language",
         "Films": [
           {
-            "title": "New Film"
-          },
-          {
             "title": "initial title"
           }
         ],
@@ -856,6 +904,30 @@ The above mutation will trigger following publications to subscribtors :
   }
 }
 ```
+
+## Validators
+
+The generated schema exposes an other type of queries that aims to provide information about how to validate data on the client side.
+
+```gql
+type FilmValidator {
+  filmId: JSON
+  title: JSON
+  description: JSON
+  releaseYear: JSON
+  rentalDuration: JSON
+  rentalRate: JSON
+  length: JSON
+  replacementCost: JSON
+  rating: JSON
+  specialFeatures: JSON
+  lastUpdate: JSON
+  languageId: JSON
+  originalLanguageId: JSON
+}
+```
+
+For each field, the provided object is the Sequelize validator.
 
 ## API
 
@@ -946,7 +1018,7 @@ To be documented...
 
 A filter passed to subcriptions `subscribe` and `resolve` methods in order to filter events based on emitter and subscriber context.
 
-Example to not resend events to initiator of mutation (given that that client provides a uuid header and server handles this to context) :
+Example to not resend events to initiator of mutation (given that te client provides a uuid header and server handles this to context) :
 
 ```javascript
  { 
