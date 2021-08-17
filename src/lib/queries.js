@@ -19,7 +19,6 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
         ...otherFindOptions,
         attributes: getRequestedAttributes(model, infos.fieldNodes[0], infos, logger)
       }, args, ctx, infos, ...rest)
-
       return findOptions
     }
   })(parent, args, ...rest)
