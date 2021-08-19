@@ -1,6 +1,6 @@
 {
   "name": "@molaux/sequelize-graphql-schema-builder",
-  "version": "2.0.0-alpha.26",
+  "version": "2.0.0",
   "homepage": "https://github.com/molaux/sequelize-graphql-schema-builder",
   "repository": {
     "type": "git",
@@ -35,11 +35,11 @@
     "pluralize": "^8.0.0"
   },
   "devDependencies": {
-    "eslint": "^7.20.0",
-    "eslint-config-standard": "^16.0.2",
-    "eslint-plugin-import": "^2.22.1",
+    "eslint": "^7.32.0",
+    "eslint-config-standard": "^16.0.3",
+    "eslint-plugin-import": "^2.24.0",
     "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-promise": "^4.3.1"
+    "eslint-plugin-promise": "^5.1.0"
   },
   "peerDependencies": {
     "graphql": ">=15.0.0",
