@@ -1,9 +1,8 @@
 'use strict'
 const Sequelize = require('sequelize')
-const DataTypes = require('sequelize/lib/data-types')
 const { getRequestedAttributes } = require('./graphql')
 const { getNestedElements } = require('./sequelize')
-const { cleanWhereQuery } = require('./query')
+const { cleanWhereQuery, processTransform, getDottedKeys } = require('./query')
 
 const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, maxManyAssociations }) => async (findOptions, { dissociate }, context, infos) => {
   logger.indent()
@@ -18,6 +17,7 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
     ...findOptions.extraAttributes || [],
     ...getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
   ]
+
   const {
     includes: nestedIncludes,
     attributes: nestedAttributes
@@ -45,6 +45,7 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
     requestedAttributes
   })
 
+  // TODO : check how is handled multiple include of same model... or merge it correctly !
   findOptions.include = [...findOptions.include || [], ...nestedIncludes]
 
   logger.log('beforeAssociationResolver', {
@@ -88,12 +89,50 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
   }
 
   if (query !== undefined) {
-    // Manage the where clause
-    if (query.where !== undefined) {
-      findOptions.where = cleanWhereQuery(targetModel, query.where)
+    // Register transformations and aliases
+    if (query.transform !== undefined) {
+      for (const attribute of Object.keys(query.transform)) {
+        query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
+      }
     }
 
-    // Manage the without clause
+    // Handle the where clause
+    if (query.where !== undefined) {
+      findOptions.where = cleanWhereQuery(targetModel, query.where)
+
+      const keysSet = new Set(getDottedKeys(findOptions.where).map((k) => k.substring(1, k.length - 1)))
+      const keys = Array.from(keysSet.values())
+      if (keys.length) {
+        const includes = []
+        for (const key of keys) {
+          const fields = key.split('.')
+          const convertToInclude = (tokens, targetModel) => tokens.length > 2
+            ? {
+                model: targetModel.associations[nameFormatter.fieldNameToModelName(tokens[0])].target,
+                // as: targetModel.associations[fieldName].as,
+                attributes: [],
+                include: [convertToInclude(tokens.slice(1), targetModel.associations[nameFormatter.fieldNameToModelName(tokens[0])].target)],
+                required: false
+              }
+            : {
+                model: targetModel.associations[nameFormatter.fieldNameToModelName(tokens[0])].target,
+                // as: targetModel.associations[fieldName].as,
+                attributes: [],
+                required: false
+              }
+          includes.push(convertToInclude(fields, targetModel))
+        }
+
+        // TODO : check how is handled multiple include of same model... or merge it correctly !
+        if (findOptions.include !== undefined) {
+          findOptions.include = [...findOptions.include, ...includes]
+        } else {
+          findOptions.include = includes
+        }
+      }
+    }
+
+    // Handle the without clause
     if (query.without !== undefined) {
       const includes = query.without.map(fieldName => ({
         model: targetModel.associations[nameFormatter.fieldNameToModelName(fieldName)].target,
@@ -111,6 +150,8 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
             null)
         ]
       }), findOptions.where)
+
+      // TODO : check how is handled multiple include of same model... or merge it correctly !
       if (findOptions.include !== undefined) {
         findOptions.include = [...findOptions.include, ...includes]
       } else {
@@ -118,36 +159,31 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       }
     }
 
-    // Manage the group clause
+    // Handle the group clause
     if (query.group !== undefined && Array.isArray(query.group) && query.group.length) {
-      findOptions.order = query.group
+      if (!query.order) {
+        query.order = []
+      }
+      findOptions.separate = true
+
       const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
       findOptions.attributes = findOptions.attributes.map(attribute => {
-        if (query.group.includes(attribute)) {
-          // if attr is grouped against, return as is
-          return attribute
-          // Don't auto-agregate fields nested by associations
-        } else if (attribute in targetModel.rawAttributes && requestedAttributes.includes(attribute)) {
-          const dataType = targetModel.rawAttributes[attribute].type
-          if (dataType instanceof DataTypes.DECIMAL) {
-            return [targetModel.sequelize.fn('SUM', targetModel.sequelize.col(attribute)), attribute]
-          } else if (dataType instanceof DataTypes.DATE || dataType instanceof DataTypes.DATEONLY) {
-            return [targetModel.sequelize.fn('MAX', targetModel.sequelize.col(attribute)), attribute]
-          } else { // TODO: add more aggregations types
-            return [targetModel.sequelize.fn('AVG', targetModel.sequelize.col(attribute)), attribute]
+        if (attribute in targetModel.rawAttributes &&
+          requestedAttributes.includes(attribute)) {
+          if (attribute in query.transform) {
+            return [query.transform[attribute], attribute]
+          } else {
+            return attribute
           }
         }
-        // throw new Error('group attr inconsistancy, should not happen')
+
         return null
       })
         .filter(attr => attr !== null)
-
-      findOptions.group = Array.isArray(query.group[0])
-        ? query.group.map(group => [group[0]])
-        : [query.group]
+      findOptions.group = query.group.map(attribute => [attribute in query.transform ? query.transform[attribute] : attribute])
     }
 
-    // Manage the order clause
+    // Handle the order clause
     if (query.order !== undefined &&
       Array.isArray(query.order) &&
       query.order.length &&
@@ -184,7 +220,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
 
     logger.log('beforeModelResolver', { query })
 
-    // Manage the limit clause
+    // Handle the limit clause
     if (query.limit !== undefined) {
       findOptions.limit = query.limit
       // findOptions.subQuery = false
@@ -198,7 +234,6 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
     findOptions
   })
   logger.outdent()
-
   return findOptions
 }
 

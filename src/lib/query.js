@@ -32,6 +32,42 @@ const getFieldQuery = (model, fieldNode, variables) => {
   return query
 }
 
+const processTransform = (model, transform) => {
+  if (typeof transform === 'object') {
+    if (Object.keys(transform).length !== 1) {
+      throw new Error('Transform clause : object should have a unique key: functionName: [ args ]')
+    }
+    const key = Object.keys(transform)[0]
+    if (key === 'literal' && (
+      !Array.isArray(transform[key]) ||
+      transform[key].length !== 1 ||
+      !/^[a-z0-9_]+$/ig.test(transform[key][0])
+    )) {
+      throw new Error('Literals arg is restricted to /^[a-z0-9_]+$/ regex')
+    }
+
+    if (model.sequelize.options.dialect === 'mssql') {
+      if (key === 'fn' && transform[key][0] === 'concat') {
+        return model.sequelize.literal(transform[key].slice(1).map(arg =>
+          typeof arg === 'object'
+            ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+            : `'${arg.replace('\'', '\\\'')}'`
+        ).join((' + ')))
+      }
+    }
+    return model.sequelize[key](...transform[key].map(arg => processTransform(model, arg)))
+  } else {
+    return transform
+  }
+}
+
+const getDottedKeys = (query) =>
+  [...typeof query === 'object'
+    ? Object.keys(query).filter((k) => k.indexOf('.') !== -1)
+    : Array.isArray(query)
+      ? query.map(getDottedKeys)
+      : []]
+
 const cleanWhereQuery = (model, whereClause, type) => {
   if (typeof whereClause === 'object') {
     if (Object.keys(whereClause).length > 1) {
@@ -70,8 +106,8 @@ const cleanWhereQuery = (model, whereClause, type) => {
         }
         // dot is not allowed in graphql keys
         if (typeof key === 'string') {
-          if (key.indexOf('->') !== -1) {
-            key = `$${key.replace(/->/g, '.')}$`
+          if (key.indexOf('__') !== -1) {
+            key = `$${key.replace(/__/g, '.')}$`
           }
         }
       } else {
@@ -109,5 +145,7 @@ const cleanWhereQuery = (model, whereClause, type) => {
 
 module.exports = {
   getFieldQuery,
-  cleanWhereQuery
+  cleanWhereQuery,
+  getDottedKeys,
+  processTransform
 }

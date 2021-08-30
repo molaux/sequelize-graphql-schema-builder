@@ -380,7 +380,150 @@ Note that the `query` argument is more limited (by default) on nested nodes sinc
 
 #### group
 
-To be documented
+The group clause uses existing attributes to apply aggregation functions. Note that the node must be dissociated to be applied (`dissociate: true`).
+
+```gql
+query {
+  Suppliers(query: { where: {id: 5}}) {
+    id
+    Products {
+      id
+      label
+      CustomerOrders(query: {
+        transform: {
+          quantity: {
+            fn: [
+              "SUM",
+              { col: [ "quantity" ]}
+            ]
+          },
+          price: {
+            fn: [
+              "AVG",
+              { col: [ "price" ]}
+            ]
+          },
+          date: {
+            fn: [
+              "concat",
+              {
+                cast: [
+                  {
+                    fn: [
+                      "DATEPART",
+                      { literal: [ "year" ]},
+                      { col: [ "date" ]}
+                    ]
+                  },
+                  "varchar"
+                ]
+              },
+              "/",
+              {
+                cast: [
+                  {
+                    fn: [
+                      "DATEPART",
+                      { literal: [ "week" ]},
+                      { col: [ "date" ]}
+                    ]
+                  },
+                  "varchar"
+                ]
+              }
+            ]
+          },
+          year: {
+            fn: [
+              "DATEPART",
+              { literal: [ "year" ]},
+              { col: [ "date" ]}
+            ]
+          },
+          week: {
+            fn: [
+              "DATEPART",
+              { literal: [ "week" ]},
+              { col: [ "date" ]}
+            ]
+          }
+        },
+        where: {
+          date: {
+            _gtOp: "2020-08-31T00:00:00.000Z"
+          }
+        },
+        group: ["year", "week"],
+        order: [["date", "ASC"]]
+      }, dissociate: true) {
+        quantity
+        date
+        price
+      }
+    }
+  }
+}
+```
+
+The `transform` object introduce the possibility to transform fields using [Sequelize static methods](https://sequelize.org/master/class/lib/sequelize.js~Sequelize.html). For grouping to work, you need a `transform` with an aggregation function for each requested attribute. New aliases (here `year` and `week`) cannot be requested as it's not part of the schema.
+
+```json
+{
+  "data": {
+    "Suppliers": [
+      {
+        "id": "5",
+        "Products": [
+          {
+            "id": "3215",
+            "label": "SALAD",
+            "CustomerOrders": [
+              {
+                "quantity": "18.546",
+                "date": "2020/50",
+                "price": "2.5"
+              },
+              {
+                "quantity": "20.846",
+                "date": "2020/51",
+                "price": "2.5"
+              },
+              {
+                "quantity": "2.284",
+                "date": "2020/52",
+                "price": "2.5"
+              }
+            ]
+          },
+          {
+            "id": "3219",
+            "label": "APPLE",
+            "CustomerOrders": [
+              {
+                "quantity": "2.184",
+                "date": "2020/36",
+                "price": "2.25"
+              },
+              {
+                "quantity": "12.602",
+                "date": "2020/39",
+                "price": "4.1"
+              },
+              {
+                "quantity": "2.61",
+                "date": "2020/40",
+                "price": "4.1"
+              }
+            ]
+          },
+          ...
+        ]
+      }
+    ]
+  }
+}
+
+```
 
 ## Mutations
 
