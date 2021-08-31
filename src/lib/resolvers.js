@@ -170,7 +170,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       findOptions.attributes = findOptions.attributes.map(attribute => {
         if (attribute in targetModel.rawAttributes &&
           requestedAttributes.includes(attribute)) {
-          if (attribute in query.transform) {
+          if (query.transform && attribute in query.transform) {
             return [query.transform[attribute], attribute]
           } else {
             return attribute
@@ -180,7 +180,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
         return null
       })
         .filter(attr => attr !== null)
-      findOptions.group = query.group.map(attribute => [attribute in query.transform ? query.transform[attribute] : attribute])
+      findOptions.group = query.group.map(attribute => [query.transform && attribute in query.transform ? query.transform[attribute] : attribute])
     }
 
     // Handle the order clause
