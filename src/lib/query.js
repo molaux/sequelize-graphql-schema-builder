@@ -46,6 +46,22 @@ const processTransform = (model, transform) => {
       throw new Error('Literals arg is restricted to /^[a-z0-9_]+$/ regex')
     }
 
+    if (key === 'fn' && transform[key][0] === 'sub') {
+      return model.sequelize.literal(transform[key].slice(1).map(arg =>
+        typeof arg === 'object'
+          ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+          : `'${arg.replace('\'', '\\\'')}'`
+      ).join((' - ')))
+    }
+
+    if (key === 'fn' && transform[key][0] === 'add') {
+      return model.sequelize.literal(transform[key].slice(1).map(arg =>
+        typeof arg === 'object'
+          ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+          : `'${arg.replace('\'', '\\\'')}'`
+      ).join((' + ')))
+    }
+
     if (model.sequelize.options.dialect === 'mssql') {
       if (key === 'fn' && transform[key][0] === 'concat') {
         return model.sequelize.literal(transform[key].slice(1).map(arg =>
