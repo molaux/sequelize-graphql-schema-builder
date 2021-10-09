@@ -91,7 +91,7 @@ const schemaBuilder = (sequelize, options) => {
     const {
       modelTypes,
       modelType,
-      modelValidatorType,
+      modelMetaType,
       modelIDType,
       modelInsertInputType,
       modelUpdateInputType,
@@ -133,7 +133,7 @@ const schemaBuilder = (sequelize, options) => {
 
     queries = {
       ...queries,
-      ...queriesBuilder(model, modelType, modelValidatorType, manyResolver, { nameFormatter }),
+      ...queriesBuilder(model, modelType, modelMetaType, manyResolver, { nameFormatter }),
       ...extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)
     }
 

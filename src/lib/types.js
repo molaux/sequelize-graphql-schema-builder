@@ -223,6 +223,38 @@ module.exports = {
       }), {})
     })
 
+    const attributes = attributeFields(model, { cache: typesCache })
+    const defaultableFields = Object.keys(model.rawAttributes)
+      .filter((attribute) => model.rawAttributes[attribute].defaultValue !== undefined &&
+      !model.rawAttributes[attribute].primaryKey &&
+      !model.rawAttributes[attribute].autoIncrement)
+    const modelDefaultValueType = defaultableFields.length
+      ? new GraphQLObjectType({
+        name: nameFormatter.formatDefaultValueTypeName(model.name),
+        description: `Exposes ${model.name} default fields values`,
+        fields: () => defaultableFields
+          .reduce((o, attribute) => ({
+            ...o,
+            [attribute]: {
+              type: attributes[attribute].type instanceof GraphQLNonNull
+                ? attributes[attribute].type
+                : new GraphQLNonNull(attributes[attribute].type)
+            }
+          }), {})
+      })
+      : null
+
+    const modelMetaType = new GraphQLObjectType({
+      name: nameFormatter.formatMetaTypeName(model.name),
+      description: `Represents ${model.name} meta informations`,
+      fields: () => ({
+        validators: { type: modelValidatorType },
+        ...modelDefaultValueType
+          ? { defaultValues: { type: modelDefaultValueType } }
+          : null
+      })
+    })
+
     // keep a trace of models to reuse in associations
     return {
       modelTypes: {
@@ -230,10 +262,10 @@ module.exports = {
         [`${nameFormatter.formatTypeName(model.name)}ID`]: modelIDType,
         [nameFormatter.formatInsertInputTypeName(model.name)]: modelInsertInputType,
         [nameFormatter.formatUpdateInputTypeName(model.name)]: modelUpdateInputType,
-        [nameFormatter.formatValidatorTypeName(model.name)]: modelValidatorType
+        [nameFormatter.formatMetaTypeName(model.name)]: modelMetaType
       },
       modelType,
-      modelValidatorType,
+      modelMetaType,
       modelIDType,
       modelInsertInputType,
       modelUpdateInputType,

@@ -25,8 +25,10 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
 
 module.exports = {
   manyResolverFactory,
-  builder: (model, modelType, modelValidatorType, manyResolver, { nameFormatter }) => {
+  builder: (model, modelType, modelMetaType, manyResolver, { nameFormatter }) => {
     const manyQueryName = nameFormatter.formatManyQueryName(model.name)
+    const metaFields = modelMetaType._fields()
+    const defaultValuesFields = metaFields?.defaultValues?.type._fields()
     return {
       [manyQueryName]: {
         namespace: nameFormatter.formatModelName(model.name),
@@ -37,15 +39,23 @@ module.exports = {
         },
         resolve: manyResolver
       },
-      [nameFormatter.formatModelValidatorQueryName(model.name)]: {
+      [nameFormatter.formatModelMetaQueryName(model.name)]: {
         namespace: nameFormatter.formatModelName(model.name),
-        type: modelValidatorType,
-        resolve: () => {
-          return Object.keys(model.rawAttributes).reduce((o, attribute) => ({
+        type: modelMetaType,
+        resolve: () => ({
+          validators: Object.keys(model.rawAttributes).reduce((o, attribute) => ({
             ...o,
             [attribute]: model.rawAttributes[attribute].validator || null
-          }), {})
-        }
+          }), {}),
+          ...defaultValuesFields
+            ? {
+                defaultValues: Object.keys(defaultValuesFields).reduce((o, attribute) => ({
+                  ...o,
+                  [attribute]: model.rawAttributes[attribute].defaultValue
+                }), {})
+              }
+            : null
+        })
       }
     }
   }

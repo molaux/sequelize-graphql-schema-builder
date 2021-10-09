@@ -11,8 +11,7 @@ const getInsertInputFields = (model, { cache: typesCache, nameFormatter }) => {
     const isID = model.rawAttributes[attribute].primaryKey
     const isNullable = model.rawAttributes[attribute].autoIncrement === true ||
       model.rawAttributes[attribute].defaultValue !== undefined ||
-      (model.options.timestamps && ['udpatedAt', 'createdAt'].includes(attribute.name))
-
+      (model.options.timestamps && ['updatedAt', 'createdAt'].includes(attribute))
     if (associationsFk.has(attribute) && !isID) {
       delete attributes[attribute]
     } else if (isID) {
