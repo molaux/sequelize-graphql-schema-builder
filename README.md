@@ -1048,11 +1048,16 @@ The above mutation will trigger following publications to subscribtors :
 }
 ```
 
-## Validators
+## Meta infos
 
 The generated schema exposes an other type of queries that aims to provide information about how to validate data on the client side.
 
 ```gql
+type FilmMeta {
+  validators: FilmValidator
+  defaultValues: FilmDefaultValue
+}
+
 type FilmValidator {
   filmId: JSON
   title: JSON
@@ -1068,9 +1073,17 @@ type FilmValidator {
   languageId: JSON
   originalLanguageId: JSON
 }
+
+type FilmDefaultValue {
+  rentalDuration: Int!
+  rentalRate: String!
+  replacementCost: String!
+  rating: FilmratingEnumType!
+  lastUpdate: Date!
+}
 ```
 
-For each field, the provided object is the Sequelize validator.
+For each field of `validators`, the provided object is the corresponding Sequelize validator (Regex have to be quoted as strings to be compatible with `JSON`). `defaultValues` is only present if at least one field has default value.
 
 ## API
 
