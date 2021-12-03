@@ -206,7 +206,8 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
               associatedModel.rawAttributes[associationFieldName].type.fields?.length) {
               orderMap = orderMap.concat(associatedModel.rawAttributes[associationFieldName].type.fields.map((field) => [{ model: associatedModel, as: targetModel.associations[associationLocalFieldName].as }, field, order]))
             } else {
-              orderMap.push([fieldName, order])
+              // console.log('composed', associationLocalFieldName, associationFieldName, order, associationLocalFieldName in targetModel.associations)
+              orderMap.push([{ model: associatedModel, as: targetModel.associations[associationLocalFieldName].as }, associationFieldName, order])
             }
           }
           // Association

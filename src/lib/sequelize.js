@@ -372,6 +372,12 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
 
         const fieldQuery = getFieldQuery(model.associations[fieldName].target, field, variables)
 
+        // if (model.associations[fieldName].associationType !== 'HasMany' && fieldQuery?.separate) {
+        //   console.log(fieldQuery)
+        //   delete fieldQuery.separate
+        //   console.log(fieldQuery)
+        // }
+
         if (fieldQuery !== null) {
           include = { ...include, ...fieldQuery }
         }

@@ -13,11 +13,11 @@ const getFieldQuery = (model, fieldNode, variables) => {
       query.required = !!args.query.required
     }
     if (args.query.offset !== undefined) {
-      query.offset = args.query.offset
+      query.offset = parseInt(args.query.offset, 10)
       query.separate = true
     }
     if (args.query.limit !== undefined) {
-      query.limit = args.query.limit
+      query.limit = parseInt(args.query.limit, 10)
       query.separate = true
     }
   }
