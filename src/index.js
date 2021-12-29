@@ -4,7 +4,8 @@ const {
 } = require('graphql')
 
 const { typeMapper } = require('graphql-sequelize')
-const DataTypes = require('sequelize/dist/lib/data-types')
+const { DataTypes } = require('sequelize')
+
 const {
   beforeResolverFactory,
   beforeModelResolverFactory,
