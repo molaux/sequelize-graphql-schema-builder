@@ -1204,3 +1204,8 @@ To be documented...
 ## Tests
 
 The [Sequelize GraphQL Schema Builder example](https://github.com/molaux/sequelize-graphql-schema-builder-example) embeds a jest test suite.
+
+## Related projects
+
+ * [MUI App Biolerplate](https://github.com/molaux/mui-app-boilerplate) is a complete client / server application that relies on this piece of code.
+ * [MUI CRUDF](https://github.com/molaux/mui-crudf) is a Material-UI component able to handle this API to generate CRUD interfaces
