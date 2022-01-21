@@ -134,18 +134,23 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
 
     // Handle the without clause
     if (query.without !== undefined) {
-      const includes = query.without.map(fieldName => ({
-        model: targetModel.associations[nameFormatter.fieldNameToModelName(fieldName)].target,
+      const includes = query.without.map(clause => ({
+        model: targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target,
         // as: targetModel.associations[fieldName].as,
         attributes: [],
+        ...(clause.where
+          ? {
+              where: cleanWhereQuery(targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target, clause.where)
+            }
+          : {}),
         required: false
       }))
 
-      findOptions.where = query.without.reduce((whereClause, fieldName) => ({
+      findOptions.where = query.without.reduce((whereClause, clause) => ({
         [Sequelize.Op.and]: [
           whereClause,
           targetModel.sequelize.where(
-            targetModel.sequelize.col(nameFormatter.fieldNameToModelName(fieldName) + '.' + targetModel.associations[nameFormatter.fieldNameToModelName(fieldName)].target.rawAttributes[targetModel.associations[nameFormatter.fieldNameToModelName(fieldName)].options.foreignKey].field),
+            targetModel.sequelize.col(nameFormatter.fieldNameToModelName(clause.field ?? clause) + '.' + targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target.rawAttributes[targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].options.foreignKey].field),
             'IS',
             null)
         ]

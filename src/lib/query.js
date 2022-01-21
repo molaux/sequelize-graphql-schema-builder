@@ -112,6 +112,15 @@ const cleanWhereQuery = (model, whereClause, type) => {
           const op = match[1]
           if (op !== undefined && op in Sequelize.Op) {
             key = Sequelize.Op[op]
+            if (typeof value === 'object' && !Array.isArray(value)) {
+              const [firstKey] = Object.keys(value)
+              const match = firstKey.match(/^_([a-zA-Z]+)Op$/)
+              if (match) {
+                return { [key]: cleanWhereQuery(model, value) }
+              } else {
+                return { [key]: model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, value))) }
+              }
+            }
           } else {
             throw Error(`Op ${op} doesn't exists !`)
           }
@@ -131,7 +140,7 @@ const cleanWhereQuery = (model, whereClause, type) => {
       }
 
       // value process
-      if (typeof value === 'object' && !Array.isArray(value)) {
+      if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
         return { [key]: cleanWhereQuery(model, value, finalType) }
       } else {
         switch (`${finalType}`) {
