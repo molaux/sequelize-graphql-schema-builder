@@ -1,13 +1,13 @@
 const Sequelize = require('sequelize')
 const { parseGraphQLArgs } = require('./graphql')
 
-const getFieldQuery = (model, fieldNode, variables) => {
+const getFieldQuery = (model, fieldNode, variables, nameFormatter) => {
   let query = null
   const args = parseGraphQLArgs(fieldNode.arguments, variables)
   if (args.query !== undefined) {
     query = {}
     if (args.query.where !== undefined) {
-      query.where = cleanWhereQuery(model, args.query.where)
+      query.where = cleanWhereQuery(model, args.query.where, undefined, nameFormatter)
     }
     if (args.query.required !== undefined) {
       query.required = !!args.query.required
@@ -84,87 +84,91 @@ const getDottedKeys = (query) =>
       ? query.map(getDottedKeys)
       : []]
 
-const cleanWhereQuery = (model, whereClause, type) => {
-  if (typeof whereClause === 'object') {
-    if (Object.keys(whereClause).length > 1) {
-      // Dive into branches
-      for (const key in whereClause) {
-        const newQuery = cleanWhereQuery(model, { [key]: whereClause[key] }, type)
+const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
+  if (Array.isArray(whereClause)) {
+    return whereClause.map(value => cleanWhereQuery(model, value, type, nameFormatter))
+  } else if (typeof whereClause === 'object' && whereClause !== null) {
+    const cleanedWhereClause = {}
 
-        delete whereClause[key]
-        whereClause = {
-          ...whereClause,
-          ...newQuery
-        }
-      }
-      return whereClause
-    } else if (Object.keys(whereClause).length === 1) {
+    for (const key of Object.keys(whereClause)) {
       // We have only one key in object in sub query
-      let [key] = Object.keys(whereClause)
-      let [value] = Object.values(whereClause)
+      let realKey = key
+      const value = whereClause[key]
       let finalType = type
 
       // key process
-      if (typeof key === 'string') {
-        // is it an operator ?
-        const match = key.match(/^_([a-zA-Z]+)Op$/)
-        if (match) {
-          const op = match[1]
-          if (op !== undefined && op in Sequelize.Op) {
-            key = Sequelize.Op[op]
-            if (typeof value === 'object' && !Array.isArray(value)) {
-              const [firstKey] = Object.keys(value)
-              const match = firstKey.match(/^_([a-zA-Z]+)Op$/)
-              if (match) {
-                return { [key]: cleanWhereQuery(model, value) }
-              } else {
-                return { [key]: model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, value))) }
-              }
+      // is it an operator ?
+      const isLogicOp = key.match(/^_([a-zA-Z]+)Op$/)
+      if (isLogicOp) {
+        const op = isLogicOp[1]
+        if (op !== undefined && op in Sequelize.Op) {
+          realKey = Sequelize.Op[op]
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
+          // if (typeof value === 'object' && !Array.isArray(value)) {
+          //   const [firstKey] = Object.keys(value)
+          //   const match = firstKey.match(/^_([a-zA-Z]+)Op$/)
+          //   if (match) {
+          //
+          //   } else {
+          //     cleanedWhereClause[realKey] = model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, value)))
+          //   }
+          // }
+        } else {
+          throw Error(`Op ${op} doesn't exists !`)
+        }
+      } else {
+        if (key.indexOf('__') !== -1) {
+          const tokens = key.split('__')
+          const modelNames = tokens.slice(0, -1)
+          const attribute = tokens.slice(-1)
+          let targetModel = model
+
+          for (const mn of modelNames) {
+            const targetModelName = nameFormatter.fieldNameToModelName(mn)
+
+            if (targetModelName in targetModel.associations) {
+              // Associations
+              // const targetKey = getTargetKey(targetModel.associations[targetModelName])
+              // const foreignKey = targetModel.associations[targetModelName].foreignKey.name ?? targetModel.associations[targetModelName].foreignKey
+              targetModel = targetModel.associations[targetModelName].target
+            } else {
+              throw Error(`Composed key ${key} is not accessible`)
             }
-          } else {
-            throw Error(`Op ${op} doesn't exists !`)
           }
+
+          if (!(attribute in targetModel.rawAttributes)) {
+            throw Error(`Composed key ${key} is not accessible`)
+          }
+
+          finalType = targetModel.rawAttributes[attribute].type
+          realKey = `$${tokens.join('.')}$`
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?
+          realKey = key
           finalType = model.rawAttributes[key].type
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
           // key = sequelize.col(key)
+        } else {
+          // Error !!!
+          return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
         }
-        // dot is not allowed in graphql keys
-        if (typeof key === 'string') {
-          if (key.indexOf('__') !== -1) {
-            key = `$${key.replace(/__/g, '.')}$`
-          }
-        }
-      } else {
-        throw Error('key should always be a string !')
       }
-
-      // value process
-      if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
-        return { [key]: cleanWhereQuery(model, value, finalType) }
-      } else {
-        switch (`${finalType}`) {
-          case 'DATETIMEOFFSET':
-            if (model.sequelize.options.dialect === 'mssql') {
-              value = Sequelize.cast(new Date(Date.parse(value)), 'DATETIMEOFFSET')
-            }
-            break
-          case 'INTEGER':
-          case 'TINYINT':
-          case 'SMALLINT':
-            value = Array.isArray(value)
-              ? value.map(v => parseInt(v, 10))
-              : parseInt(value, 10)
-            break
-        }
-
-        return { [key]: value }
-      }
-    } else {
-      return {}
     }
+    return cleanedWhereClause
   } else {
-    throw Error('Where clause should always be an object !')
+    switch (`${type}`) {
+      case 'DATETIMEOFFSET':
+        if (model.sequelize.options.dialect === 'mssql') {
+          return Sequelize.cast(new Date(Date.parse(whereClause)), 'DATETIMEOFFSET')
+        }
+        break
+      case 'INTEGER':
+      case 'TINYINT':
+      case 'SMALLINT':
+        return parseInt(whereClause, 10)
+    }
+    return whereClause
   }
 }
 

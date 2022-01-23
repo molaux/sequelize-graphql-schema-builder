@@ -98,7 +98,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
 
     // Handle the where clause
     if (query.where !== undefined) {
-      findOptions.where = cleanWhereQuery(targetModel, query.where)
+      findOptions.where = cleanWhereQuery(targetModel, query.where, undefined, nameFormatter)
 
       const keysSet = new Set(getDottedKeys(findOptions.where).map((k) => k.substring(1, k.length - 1)))
       const keys = Array.from(keysSet.values())
@@ -140,7 +140,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
         attributes: [],
         ...(clause.where
           ? {
-              where: cleanWhereQuery(targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target, clause.where)
+              where: cleanWhereQuery(targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target, clause.where, undefined, nameFormatter)
             }
           : {}),
         required: false

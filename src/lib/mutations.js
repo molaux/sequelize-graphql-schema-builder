@@ -64,7 +64,7 @@ module.exports = {
               }
             }
 
-            await model.destroy({ where: cleanWhereQuery(model, query.where), transaction })
+            await model.destroy({ where: cleanWhereQuery(model, query.where, undefined, nameFormatter), transaction })
 
             accumulatorPubSub?.publish('modelsDeleted', { model, instances: models })
 
@@ -193,7 +193,7 @@ module.exports = {
             const instances = []
 
             // retrieve instances targeted by query
-            for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where), transaction })) {
+            for (const instance of await model.findAll({ where: cleanWhereQuery(model, query.where, undefined, nameFormatter), transaction })) {
               for (const field in sequelizeSetInput) {
                 instance[field] = sequelizeSetInput[field]
               }
