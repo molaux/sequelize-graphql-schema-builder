@@ -4,6 +4,25 @@ const { getRequestedAttributes } = require('./graphql')
 const { getNestedElements } = require('./sequelize')
 const { cleanWhereQuery, processTransform, getDottedKeys } = require('./query')
 
+const includesMerger = (include1, include2) => include1.reduce(
+  (nextInclude, prevIncludeModel) => {
+    const alreadyDefined = nextInclude.filter(({ model }) => model === prevIncludeModel.model)
+    if (alreadyDefined.length) {
+      for (const iad of alreadyDefined) {
+        if (iad.attributes && prevIncludeModel.attributes) {
+          // TODO : handle other fields
+          iad.attributes = [...iad.attributes, ...prevIncludeModel.attributes.filter(a => !iad.attributes.includes(a))]
+        }
+      }
+
+      return nextInclude
+    } else {
+      return [...nextInclude, prevIncludeModel]
+    }
+  },
+  include2
+)
+
 const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, maxManyAssociations }) => async (findOptions, { dissociate }, context, infos) => {
   logger.indent()
   delete findOptions.graphqlContext
@@ -46,7 +65,7 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
   })
 
   // TODO : check how is handled multiple include of same model... or merge it correctly !
-  findOptions.include = [...findOptions.include || [], ...nestedIncludes]
+  findOptions.include = includesMerger(findOptions.include || [], nestedIncludes)
 
   logger.log('beforeAssociationResolver', {
     'findOptions.include': findOptions.include,
@@ -123,9 +142,8 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
           includes.push(convertToInclude(fields, targetModel))
         }
 
-        // TODO : check how is handled multiple include of same model... or merge it correctly !
         if (findOptions.include !== undefined) {
-          findOptions.include = [...findOptions.include, ...includes]
+          findOptions.include = includesMerger(findOptions.include, includes)
         } else {
           findOptions.include = includes
         }
@@ -158,7 +176,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
 
       // TODO : check how is handled multiple include of same model... or merge it correctly !
       if (findOptions.include !== undefined) {
-        findOptions.include = [...findOptions.include, ...includes]
+        findOptions.include = includesMerger(findOptions.include, includes)
       } else {
         findOptions.include = includes
       }
