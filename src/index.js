@@ -56,6 +56,7 @@ typeMapper.mapType((type) => {
 const schemaBuilder = (sequelize, options) => {
   const {
     namespace,
+    modelsTypes,
     extraModelFields,
     extraModelQueries,
     extraModelTypes,
@@ -66,6 +67,7 @@ const schemaBuilder = (sequelize, options) => {
     subscriptionsContextFilter
   } = Object.assign({}, {
     namespace: '',
+    modelsTypes: {},
     extraModelTypes: () => ({}),
     extraModelFields: () => ({}),
     extraModelQueries: () => ({}),
@@ -76,7 +78,7 @@ const schemaBuilder = (sequelize, options) => {
     subscriptionsContextFilter: () => true
   }, options)
 
-  const modelsTypes = {}
+  // const modelsTypes = {}
   let queries = {}
   let mutations = {}
   let subscriptions = {}
