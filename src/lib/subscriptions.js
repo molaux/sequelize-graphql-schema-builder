@@ -1,5 +1,6 @@
 const { GraphQLList } = require('graphql')
 const { withFilter } = require('graphql-subscriptions')
+const { GraphQLJSON } = require('graphql-type-json')
 
 const AccumulatorPubSub = function () {
   this.register = []
@@ -23,10 +24,10 @@ const AccumulatorPubSub = function () {
   }
 }
 
-const payloadsReducer = (model, payloads, context, contextFilter) => Array.from(payloads
+const payloadsReducer = (model, payloads, context, contextFilter, args) => Array.from(payloads
   // filter payloads by model
   .filter(({ model: { name: payloadModelName }, emitterContext }) => payloadModelName === model.name &&
-    (!contextFilter || contextFilter(emitterContext, context)))
+    (!contextFilter || contextFilter(emitterContext, context, args, model, payloads)))
   // resolve instances
   .map(({ ids, instances }) => ([
     ...ids ?? [],
@@ -38,14 +39,20 @@ const payloadsReducer = (model, payloads, context, contextFilter) => Array.from(
 
 const instancesResolverFactory = (model, manyResolver, contextFilter) => (payloads, args, context, ...rest) => {
   if (payloads.length) {
+    console.log(args)
     return manyResolver(
       null,
       {
         query: {
           where: {
-            [model.primaryKeyAttribute]: {
-              _inOp: payloadsReducer(model, payloads, context, contextFilter)
-            }
+            _andOp: [
+              {
+                [model.primaryKeyAttribute]: {
+                  _inOp: payloadsReducer(model, payloads, context, contextFilter, args)
+                }
+              },
+              ...args?.query?.where ? [args.query.where] : []
+            ]
           }
         }
       },
@@ -60,7 +67,7 @@ const subscribeToModelInstancesFactory = (model, action, contextFilter) => (payl
   () => pubSub.asyncIterator(action),
   (payloads) => payloads.reduce(
     (keep, { model: { name: payloadModelName }, emitterContext }) => (keep || payloadModelName === model.name) &&
-      (!contextFilter || contextFilter(emitterContext, ctx)),
+      (!contextFilter || contextFilter(emitterContext, { pubSub, ...ctx }, args, model, payload)),
     false
   )
 )(payload, args, { pubSub, ...ctx }, ...rest)
@@ -78,6 +85,10 @@ module.exports = {
     return {
       [createdModelSubscriptionName]: {
         namespace: nameFormatter.formatModelName(model.name),
+        args: {
+          query: { type: GraphQLJSON },
+          config: { type: GraphQLJSON }
+        },
         type: new GraphQLList(modelType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated', contextFilter),
         resolve: instancesResolverFactory(model, manyResolver, contextFilter)
@@ -85,6 +96,10 @@ module.exports = {
 
       [updatedModelSubscriptionName]: {
         namespace: nameFormatter.formatModelName(model.name),
+        args: {
+          query: { type: GraphQLJSON },
+          config: { type: GraphQLJSON }
+        },
         type: new GraphQLList(modelType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated', contextFilter),
         resolve: instancesResolverFactory(model, manyResolver, contextFilter)
@@ -92,9 +107,12 @@ module.exports = {
 
       [deletedModelSubscriptionName]: {
         namespace: nameFormatter.formatModelName(model.name),
+        args: {
+          config: { type: GraphQLJSON }
+        },
         type: new GraphQLList(modelIDType),
         subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted', contextFilter),
-        resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter).map((id) => ({ [model.primaryKeyAttribute]: id }))
+        resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter, args).map((id) => ({ [model.primaryKeyAttribute]: id }))
       }
     }
   }
