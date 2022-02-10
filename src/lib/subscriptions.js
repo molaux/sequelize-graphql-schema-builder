@@ -39,7 +39,6 @@ const payloadsReducer = (model, payloads, context, contextFilter, args) => Array
 
 const instancesResolverFactory = (model, manyResolver, contextFilter) => (payloads, args, context, ...rest) => {
   if (payloads.length) {
-    console.log(args)
     return manyResolver(
       null,
       {
