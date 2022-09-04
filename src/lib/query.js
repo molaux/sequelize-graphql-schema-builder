@@ -71,7 +71,11 @@ const processTransform = (model, transform) => {
         ).join((' + ')))
       }
     }
-    return model.sequelize[key](...transform[key].map(arg => processTransform(model, arg)))
+    if (Array.isArray(transform[key])) {
+      return model.sequelize[key](...transform[key].map(arg => processTransform(model, arg)))
+    } else {
+      throw Error(`${key} does not seem to be transformable...`)
+    }
   } else {
     return transform
   }
