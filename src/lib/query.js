@@ -141,7 +141,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
           }
 
           finalType = targetModel.rawAttributes[attribute].type
-          realKey = `$${tokens.join('.')}$`
+          realKey = `$${[...modelNames, targetModel.rawAttributes[attribute].field].join('.')}$`
           cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?
