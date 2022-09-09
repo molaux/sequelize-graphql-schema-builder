@@ -161,16 +161,20 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
     }
     return cleanedWhereClause
   } else {
-    switch (`${type}`) {
-      case 'DATETIMEOFFSET':
-        if (model.sequelize.options.dialect === 'mssql') {
-          return Sequelize.cast(new Date(Date.parse(whereClause)), 'DATETIMEOFFSET')
-        }
-        break
-      case 'INTEGER':
-      case 'TINYINT':
-      case 'SMALLINT':
-        return parseInt(whereClause, 10)
+    if (whereClause !== null) {
+      switch (`${type}`) {
+        case 'DATETIMEOFFSET':
+          if (model.sequelize.options.dialect === 'mssql') {
+            return Sequelize.cast(new Date(Date.parse(whereClause)), 'DATETIMEOFFSET')
+          }
+          break
+        case 'INTEGER':
+        case 'TINYINT':
+        case 'SMALLINT':
+          return parseInt(whereClause, 10)
+        case 'DECIMAL':
+          return parseFloat(whereClause)
+      }
     }
     return whereClause
   }
