@@ -1,13 +1,13 @@
 const Sequelize = require('sequelize')
 const { parseGraphQLArgs } = require('./graphql')
 
-const getFieldQuery = (model, fieldNode, variables, nameFormatter) => {
+const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) => {
   let query = null
   const args = parseGraphQLArgs(fieldNode.arguments, variables)
   if (args.query !== undefined) {
     query = {}
     if (args.query.where !== undefined) {
-      query.where = cleanWhereQuery(model, args.query.where, undefined, nameFormatter)
+      query.where = cleanWhereQuery(model, args.query.where, undefined, nameFormatter, nestedKeys)
     }
     if (args.query.required !== undefined) {
       query.required = !!args.query.required
@@ -88,9 +88,9 @@ const getDottedKeys = (query) =>
       ? query.map(getDottedKeys)
       : []]
 
-const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
+const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) => {
   if (Array.isArray(whereClause)) {
-    return whereClause.map(value => cleanWhereQuery(model, value, type, nameFormatter))
+    return whereClause.map(value => cleanWhereQuery(model, value, type, nameFormatter, nestedKeys))
   } else if (typeof whereClause === 'object' && whereClause !== null) {
     const cleanedWhereClause = {}
 
@@ -107,7 +107,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
         const op = isLogicOp[1]
         if (op !== undefined && op in Sequelize.Op) {
           realKey = Sequelize.Op[op]
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
           // if (typeof value === 'object' && !Array.isArray(value)) {
           //   const [firstKey] = Object.keys(value)
           //   const match = firstKey.match(/^_([a-zA-Z]+)Op$/)
@@ -124,12 +124,13 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
         if (key.indexOf('__') !== -1) {
           const tokens = key.split('__')
           const modelNames = tokens.slice(0, -1)
-          const attribute = tokens.slice(-1)
+          const [attribute] = tokens.slice(-1)
           let targetModel = model
 
           for (const mn of modelNames) {
             const targetModelName = nameFormatter.fieldNameToModelName(mn)
 
+            // Follow chain for check
             if (targetModelName in targetModel.associations) {
               // Associations
               // const targetKey = getTargetKey(targetModel.associations[targetModelName])
@@ -145,13 +146,16 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter) => {
           }
 
           finalType = targetModel.rawAttributes[attribute].type
-          realKey = `$${[...modelNames, targetModel.rawAttributes[attribute].field].join('.')}$`
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
+          if (nestedKeys.length) {
+            throw Error('You caonnt use nested column into included models at the present time')
+          }
+          realKey = `$${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}$`
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?
           realKey = key
           finalType = model.rawAttributes[key].type
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter)
+          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
           // key = sequelize.col(key)
         } else {
           // Error !!!

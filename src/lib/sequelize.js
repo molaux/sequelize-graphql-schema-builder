@@ -6,6 +6,7 @@ const { getRequestedAttributes, parseGraphQLArgs, resolveFragments } = require('
 const { getFieldQuery } = require('./query')
 
 const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
+const { includesMerger } = require('./resolvers')
 
 const getTargetKey = (association) => association.options.targetKey ?? association.target.primaryKeyAttribute
 
@@ -253,7 +254,7 @@ const getPrimaryKeyType = (model, cache) => {
   throw Error(`Primary key not found for ${model.name}`)
 }
 
-const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, logger, maxManyAssociations }) => {
+const getNestedElements = (model, infos, fieldNode, variables, nestedKeys, { nameFormatter, logger, maxManyAssociations }) => {
   logger.indent()
   const includes = []
   const attributes = []
@@ -349,6 +350,7 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
           infos,
           field,
           variables,
+          [...nestedKeys, fieldName],
           { nameFormatter, logger, maxManyAssociations }
         )
 
@@ -370,7 +372,7 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
           include.include = nestedIncludes
         }
 
-        const fieldQuery = getFieldQuery(model.associations[fieldName].target, field, variables, nameFormatter)
+        const fieldQuery = getFieldQuery(model.associations[fieldName].target, field, variables, nameFormatter, [...nestedKeys, fieldName])
 
         // if (model.associations[fieldName].associationType !== 'HasMany' && fieldQuery?.separate) {
         //   console.log(fieldQuery)
@@ -400,22 +402,25 @@ const getNestedElements = (model, infos, fieldNode, variables, { nameFormatter, 
 
 const findOptionsMerger = (fo1, fo2) => {
   const graphqlContext = fo1.graphqlContext || fo2.graphqlContext
+  const include1 = fo1.include
+  const include2 = fo2.include
   delete fo1.graphqlContext
+  delete fo1.include
   delete fo2.graphqlContext
+  delete fo2.include
 
   const findOptions = deepmerge(fo1, fo2)
 
-  if ('include' in findOptions) {
-    const reducedInclude = new Map()
-    for (const include of findOptions.include) {
-      if (!reducedInclude.has(include.model)) {
-        reducedInclude.set(include.model, include)
-      } else {
-        reducedInclude.set(include.model, findOptionsMerger(reducedInclude.get(include.model), include))
-      }
-    }
-    findOptions.include = Array.from(reducedInclude.values())
+  if (include1 && include2) {
+    findOptions.include = includesMerger(include1, include2)
+  } else if (include1) {
+    findOptions.include = include1
+  } else if (include2) {
+    findOptions.include = include2
   }
+  fo1.include = include1
+  fo2.include = include2
+
   if (graphqlContext) {
     fo1.graphqlContext = graphqlContext
     fo2.graphqlContext = graphqlContext

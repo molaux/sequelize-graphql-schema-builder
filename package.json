@@ -1,6 +1,6 @@
 {
   "name": "@molaux/sequelize-graphql-schema-builder",
-  "version": "2.2.6",
+  "version": "2.3.0",
   "homepage": "https://github.com/molaux/sequelize-graphql-schema-builder",
   "repository": {
     "type": "git",
@@ -29,6 +29,7 @@
   "author": "Marc-Olivier Laux <marc-olivier@matlaux.net> (https://github.com/molaux)",
   "license": "MIT",
   "dependencies": {
+    "deep-eql": "^4.1.1",
     "deepmerge": "^4.2.2",
     "graphql-sequelize": "^9.4.2",
     "graphql-subscriptions": "^1.2.1",
