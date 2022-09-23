@@ -5,6 +5,7 @@ const { getNestedElements } = require('./sequelize')
 const { cleanWhereQuery, processTransform, getDottedKeys } = require('./query')
 // const { dir } = require('./logger')
 const isDeepEqual = require('deep-eql')
+const deepmerge = require('deepmerge')
 
 const copyInclude = ({ attributes, include, where, ...rest }) => ({
   attributes: [...attributes ?? []],
@@ -342,9 +343,39 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
   return findOptions
 }
 
+const findOptionsMerger = (fo1, fo2) => {
+  const graphqlContext = fo1.graphqlContext || fo2.graphqlContext
+  const include1 = fo1.include
+  const include2 = fo2.include
+  delete fo1.graphqlContext
+  delete fo1.include
+  delete fo2.graphqlContext
+  delete fo2.include
+
+  const findOptions = deepmerge(fo1, fo2)
+
+  if (include1 && include2) {
+    findOptions.include = includesMerger(include1, include2)
+  } else if (include1) {
+    findOptions.include = include1
+  } else if (include2) {
+    findOptions.include = include2
+  }
+  fo1.include = include1
+  fo2.include = include2
+
+  if (graphqlContext) {
+    fo1.graphqlContext = graphqlContext
+    fo2.graphqlContext = graphqlContext
+    findOptions.graphqlContext = graphqlContext
+  }
+  return findOptions
+}
+
 module.exports = {
   beforeAssociationResolverFactory,
   includesMerger,
+  findOptionsMerger,
   beforeModelResolverFactory,
   beforeResolverFactory: (model, options) => (...args) => beforeModelResolverFactory(model, options)(beforeAssociationResolverFactory(model, options)(...args), ...args.slice(1))
 }

@@ -1,4 +1,3 @@
-const deepmerge = require('deepmerge')
 const { attributeFields } = require('graphql-sequelize')
 const { GraphQLList, GraphQLNonNull } = require('graphql')
 const { InputModelIDType } = require('./InputModelIDType')
@@ -6,7 +5,6 @@ const { getRequestedAttributes, parseGraphQLArgs, resolveFragments } = require('
 const { getFieldQuery } = require('./query')
 
 const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
-const { includesMerger } = require('./resolvers')
 
 const getTargetKey = (association) => association.options.targetKey ?? association.target.primaryKeyAttribute
 
@@ -400,39 +398,9 @@ const getNestedElements = (model, infos, fieldNode, variables, nestedKeys, { nam
   return { includes, attributes }
 }
 
-const findOptionsMerger = (fo1, fo2) => {
-  const graphqlContext = fo1.graphqlContext || fo2.graphqlContext
-  const include1 = fo1.include
-  const include2 = fo2.include
-  delete fo1.graphqlContext
-  delete fo1.include
-  delete fo2.graphqlContext
-  delete fo2.include
-
-  const findOptions = deepmerge(fo1, fo2)
-
-  if (include1 && include2) {
-    findOptions.include = includesMerger(include1, include2)
-  } else if (include1) {
-    findOptions.include = include1
-  } else if (include2) {
-    findOptions.include = include2
-  }
-  fo1.include = include1
-  fo2.include = include2
-
-  if (graphqlContext) {
-    fo1.graphqlContext = graphqlContext
-    fo2.graphqlContext = graphqlContext
-    findOptions.graphqlContext = graphqlContext
-  }
-  return findOptions
-}
-
 module.exports = {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,
-  findOptionsMerger,
   getTargetKey
 }

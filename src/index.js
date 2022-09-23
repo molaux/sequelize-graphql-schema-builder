@@ -7,6 +7,8 @@ const { typeMapper } = require('graphql-sequelize')
 const { DataTypes } = require('sequelize')
 
 const {
+  findOptionsMerger,
+  includesMerger,
   beforeResolverFactory,
   beforeModelResolverFactory,
   beforeAssociationResolverFactory
@@ -20,10 +22,6 @@ const {
   getRequestedAttributes,
   resolveFragments
 } = require('./lib/graphql.js')
-
-const {
-  findOptionsMerger
-} = require('./lib/sequelize.js')
 
 const {
   nameFormatterFactory
@@ -187,6 +185,7 @@ module.exports = {
   getRequestedAttributes,
   beforeResolverFactory,
   findOptionsMerger,
+  includesMerger,
   nameFormatterFactory,
   loggerFactory,
   beforeModelResolverFactory,
