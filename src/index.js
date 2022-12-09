@@ -1,6 +1,7 @@
 'use strict'
 const {
-  GraphQLString
+  GraphQLString,
+  GraphQLScalarType
 } = require('graphql')
 
 const { typeMapper } = require('graphql-sequelize')
@@ -44,11 +45,40 @@ const {
   builder: subscriptionsBuilder
 } = require('./lib/subscriptions')
 
+function fromISODate (value) {
+  try {
+    if (!value) return null
+    return new Date(value)
+  } catch (e) {
+    return null
+  }
+}
+
+function toISODate (d) {
+  if (!d) return null
+  if ((d instanceof Date)) {
+    return d.toISOString()
+  }
+  return d
+}
+
+const GraphQLDateOnly = new GraphQLScalarType({
+  name: 'DateOnly',
+  description: 'A special custom Scalar type for Dates that converts to a ISO formatted string ',
+  serialize: toISODate,
+  parseValue: fromISODate,
+  parseLiteral (ast) {
+    return new Date(ast.value)
+  }
+})
+
 typeMapper.mapType((type) => {
-  if (type instanceof DataTypes.BLOB) {
+  if (type instanceof DataTypes.DATEONLY) {
+    return GraphQLDateOnly
+  } else if (type instanceof DataTypes.BLOB) {
     return GraphQLString
   }
-  return false
+  return null
 })
 
 const schemaBuilder = (sequelize, options) => {
