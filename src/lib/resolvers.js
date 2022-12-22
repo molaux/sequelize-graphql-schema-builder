@@ -17,7 +17,7 @@ const copyInclude = ({ attributes, include, where, ...rest }) => ({
 const includesMerger = (includes1, includes2) => {
   const result = includes1.map(copyInclude).reduce(
     (result, include1) => {
-      const alreadyDefined = result.filter(({ model, as }) => model === include1.model && as === include1.as)
+      const alreadyDefined = result.filter(({ model, as }) => model === include1.model && (!as || !include1.as || as === include1.as))
       if (alreadyDefined.length) {
         for (const iad of alreadyDefined) {
           // attributes
@@ -79,6 +79,9 @@ const includesMerger = (includes1, includes2) => {
             iad.required = iad.required && include1.required
           } else if (include1.required !== undefined) {
             iad.required = include1.required
+          }
+          if (!iad.as && include1.as) {
+            iad.as = include1.as
           }
         }
 
