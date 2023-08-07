@@ -1,12 +1,14 @@
 'use strict'
 const {
   GraphQLString,
-  GraphQLScalarType
+  GraphQLScalarType,
+  GraphQLFloat
 } = require('graphql')
 
 const { typeMapper } = require('graphql-sequelize')
 const { DataTypes } = require('sequelize')
 
+const { cleanWhereQuery } = require('./lib/query.js')
 const {
   findOptionsMerger,
   includesMerger,
@@ -34,7 +36,8 @@ const {
 
 const {
   builder: queriesBuilder,
-  manyResolverFactory
+  manyResolverFactory,
+  countResolverFactory
 } = require('./lib/queries')
 
 const {
@@ -77,6 +80,8 @@ typeMapper.mapType((type) => {
     return GraphQLDateOnly
   } else if (type instanceof DataTypes.BLOB) {
     return GraphQLString
+  } else if (type instanceof DataTypes.DECIMAL) {
+    return GraphQLFloat
   }
   return null
 })
@@ -161,10 +166,11 @@ const schemaBuilder = (sequelize, options) => {
 
     // Root models query
     const manyResolver = manyResolverFactory(model, { nameFormatter, logger, maxManyAssociations })
+    const countResolver = countResolverFactory(model, { nameFormatter, logger, maxManyAssociations })
 
     queries = {
       ...queries,
-      ...queriesBuilder(model, modelType, modelMetaType, manyResolver, { nameFormatter }),
+      ...queriesBuilder(model, modelType, modelMetaType, manyResolver, countResolver, { nameFormatter }),
       ...extraModelQueries({ modelsTypes, nameFormatter, logger }, model, queries)
     }
 
@@ -220,5 +226,6 @@ module.exports = {
   loggerFactory,
   beforeModelResolverFactory,
   beforeAssociationResolverFactory,
-  resolveFragments
+  resolveFragments,
+  cleanWhereQuery
 }

@@ -146,10 +146,10 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           }
 
           finalType = targetModel.rawAttributes[attribute].type
-          if (nestedKeys.length) {
-            throw Error('You caonnt use nested column into included models at the present time')
-          }
-          realKey = `$${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}$`
+          // if (nestedKeys.length) {
+          //   throw Error('You cannot use nested column into included models at the present time')
+          // }
+          realKey = `#${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}#`
           cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?

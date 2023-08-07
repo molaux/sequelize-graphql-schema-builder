@@ -130,7 +130,7 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
   // }
 
   // Add keys needed by associations
-  const requestedAttributes = infos.fieldNodes[0].selectionSet.selections
+  const requestedAttributes = (infos.fieldNodes?.[0]?.selectionSet?.selections || [])
     .map(({ name: { value } }) => value)
 
   logger.log('beforeAssociationResolver', {
@@ -198,7 +198,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       const keys = Array.from(keysSet.values())
       if (keys.length) {
         const includes = []
-        for (const key of keys) {
+        for (const key of keys.filter((key) => key[0] === '$')) {
           const fields = key.split('.')
           const convertToInclude = (tokens, targetModel) => tokens.length > 2
             ? {

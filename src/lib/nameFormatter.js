@@ -29,6 +29,9 @@ const nameFormatterFactory = namespace => ({
     const manyFormattedQueryName = pluralize(formattedQueryName)
     return manyFormattedQueryName === formattedQueryName ? `${formattedQueryName}s` : manyFormattedQueryName
   },
+  formatCountQueryName: function (modelName) {
+    return `count${this.formatManyQueryName(modelName)}`
+  },
   modelNameToFieldName: function (modelName, singularModelName) {
     if (!this.modelToFieldMap.has(modelName)) {
       const fieldName = this.formatModelNameAsField(modelName)
