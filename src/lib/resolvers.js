@@ -295,8 +295,12 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       for (const [fieldName, order] of query.order) {
         if ((targetModel.rawAttributes[fieldName]?.type instanceof Sequelize.DataTypes.VIRTUAL) &&
           targetModel.rawAttributes[fieldName].type.fields?.length) {
-          // Virtual field
-          orderMap = orderMap.concat(targetModel.rawAttributes[fieldName].type.fields.map((field) => [field, order]))
+          if (targetModel.rawAttributes[fieldName].query) {
+            orderMap.push([Sequelize.literal(`(${targetModel.rawAttributes[fieldName].query})`), order])
+          } else {
+            // Virtual field, default srt by dependencies
+            orderMap = orderMap.concat(targetModel.rawAttributes[fieldName].type.fields.map((field) => [field, order]))
+          }
         } else if (fieldName.indexOf('.') !== -1) {
           const tokens = fieldName.split('.')
           const associationLocalFieldNames = tokens.slice(0, -1)
