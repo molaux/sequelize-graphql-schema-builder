@@ -107,7 +107,11 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
         const op = isLogicOp[1]
         if (op !== undefined && op in Sequelize.Op) {
           realKey = Sequelize.Op[op]
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+          if ([Sequelize.Op.and, Sequelize.Op.or].includes(realKey) && realKey in cleanedWhereClause) {
+            cleanedWhereClause[realKey].push(...cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys))
+          } else {
+            cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+          }
           // if (typeof value === 'object' && !Array.isArray(value)) {
           //   const [firstKey] = Object.keys(value)
           //   const match = firstKey.match(/^_([a-zA-Z]+)Op$/)
@@ -155,8 +159,34 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           // it's not an operator so is it a field of model ?
           realKey = key
           finalType = model.rawAttributes[key].type
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+          // cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
           // key = sequelize.col(key)
+          if (model.rawAttributes[key].query) {
+            // this is a virtual field using a custom query
+            const whereClause = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+            let whereClauseParsed = ''
+            let op = Sequelize.Op.eq
+            if (Array.isArray(whereClause)) {
+              whereClauseParsed = `(${whereClause.map((item) => model.sequelize.dialect.queryGenerator.escape(item, model.rawAttributes[key])).join(', ')})`
+              op = Sequelize.Op.in
+            } else if (typeof whereClause === 'object') {
+              op = Object.getOwnPropertySymbols(whereClause)[0]
+              if (Array.isArray(whereClause[op])) {
+                whereClauseParsed = `(${whereClause[op].map((item) => model.sequelize.dialect.queryGenerator.escape(item, model.rawAttributes[key])).join(', ')})`
+              } else {
+                whereClauseParsed = model.sequelize.dialect.queryGenerator.escape(whereClause[op], model.rawAttributes[key])
+              }
+            } else {
+              whereClauseParsed = model.sequelize.dialect.queryGenerator.escape(whereClause, model.rawAttributes[key])
+            }
+            if (Sequelize.Op.and in cleanedWhereClause) {
+              cleanedWhereClause[realKey].push(Sequelize.literal(`(${model.rawAttributes[key].query}) ${model.sequelize.dialect.queryGenerator.OperatorMap[op]} ${whereClauseParsed}`))
+            } else {
+              cleanedWhereClause[Sequelize.Op.and] = Sequelize.literal(`(${model.rawAttributes[key].query}) ${model.sequelize.dialect.queryGenerator.OperatorMap[op]} ${whereClauseParsed}`)
+            }
+          } else {
+            cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+          }
         } else {
           // Error !!!
           return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))

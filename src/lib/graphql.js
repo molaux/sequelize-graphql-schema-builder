@@ -78,7 +78,13 @@ const getRequestedAttributes = (model, fieldNode, infos, logger, map) => {
       if (model.associations[fieldName] !== undefined) {
         // attributes = attributes.concat(getNestedAttributes(model.associations[fieldName].target, field).map(nestedAttribute => `${fieldName}.${nestedAttribute}`))
       } else if (columns.has(fieldName)) {
-        attributes.push(fieldName)
+        if (model.rawAttributes[fieldName].query) {
+          if (!attributes.find((a) => Array.isArray(a) && a[1] === fieldName)) {
+            attributes.push([model.sequelize.literal(model.rawAttributes[fieldName].query), fieldName])
+          }
+        } else if (!attributes.includes(fieldName)) {
+          attributes.push(fieldName)
+        }
       }
     }
   }
