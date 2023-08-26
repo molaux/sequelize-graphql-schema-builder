@@ -20,6 +20,40 @@ const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) =
       query.limit = parseInt(args.query.limit, 10)
       query.separate = true
     }
+    if (args.query.transform !== undefined) {
+      query.transform = {}
+      for (const attribute of Object.keys(args.query.transform)) {
+        if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
+          query.transform[attribute] = processTransform(model, args.query.transform[attribute])
+        }
+      }
+    }
+
+    // Handle the group clause
+    if (args.query.group !== undefined && Array.isArray(args.query.group) && args.query.group.length) {
+      if (!query.order) {
+        query.order = []
+      }
+      // findOptions.separate = true
+
+      // const requestedAttributes = getRequestedAttributes(model, fieldNode, infos, logger)
+      // findOptions.attributes = findOptions.attributes.map(attribute => {
+      //   if (attribute in targetModel.rawAttributes &&
+      //     requestedAttributes.includes(attribute)) {
+      //     if (query.transform && attribute in query.transform) {
+      //       return [query.transform[attribute], attribute]
+      //     } else {
+      //       return attribute
+      //     }
+      //   }
+
+      //   return null
+      // })
+      //   .filter(attr => attr !== null)
+      query.group = args.query.group.map(attribute => query.transform && attribute in query.transform ? query.transform[attribute] : attribute)
+      console.log('group fo')
+      console.dir(query, { depth: 3 })
+    }
   }
 
   // if (args.required !== undefined) {
@@ -35,7 +69,7 @@ const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) =
 const processTransform = (model, transform) => {
   if (typeof transform === 'object') {
     if (Object.keys(transform).length !== 1) {
-      throw new Error('Transform clause : object should have a unique key: functionName: [ args ]')
+      throw new Error(`Transform clause : object should have a unique key: functionName: [ args ]. Got ${JSON.stringify(transform)}`)
     }
     const key = Object.keys(transform)[0]
     if (key === 'literal' && (
@@ -125,8 +159,12 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           throw Error(`Op ${op} doesn't exists !`)
         }
       } else {
-        if (key.indexOf('__') !== -1) {
-          const tokens = key.split('__')
+        if (key.indexOf('__') !== -1 || key.indexOf('!!') !== -1) {
+          const negative = key.indexOf('!!') !== -1
+          const tokens = !negative
+            ? key.split('__')
+            : key.split('!!')
+
           const modelNames = tokens.slice(0, -1)
           const [attribute] = tokens.slice(-1)
           let targetModel = model
@@ -153,7 +191,8 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           // if (nestedKeys.length) {
           //   throw Error('You cannot use nested column into included models at the present time')
           // }
-          realKey = `#${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}#`
+          const symbol = negative ? '!' : '#'
+          realKey = `${symbol}${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}${symbol}`
           cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?
@@ -189,6 +228,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           }
         } else {
           // Error !!!
+          throw Error('unknown field' + key)
           return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
         }
       }

@@ -371,7 +371,9 @@ const getNestedElements = (model, infos, fieldNode, variables, nestedKeys, { nam
         }
 
         const fieldQuery = getFieldQuery(model.associations[fieldName].target, field, variables, nameFormatter, [...nestedKeys, fieldName])
-
+        if (fieldQuery?.group || fieldQuery?.transform) {
+          continue
+        }
         // if (model.associations[fieldName].associationType !== 'HasMany' && fieldQuery?.separate) {
         //   console.log(fieldQuery)
         //   delete fieldQuery.separate

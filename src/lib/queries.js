@@ -21,7 +21,7 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
         ...otherFindOptions,
         attributes: getRequestedAttributes(model, infos.fieldNodes[0], infos, logger)
       }, args, ctx, infos, ...rest)
-      // console.dir(findOptions, { depth: 3 })
+      console.dir(findOptions, { depth: 3 })
       return findOptions
     }
   })(parent, args, ...rest)

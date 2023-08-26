@@ -186,7 +186,9 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
     // Register transformations and aliases
     if (query.transform !== undefined) {
       for (const attribute of Object.keys(query.transform)) {
-        query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
+        if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
+          query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
+        }
       }
     }
 
@@ -263,7 +265,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       if (!query.order) {
         query.order = []
       }
-      findOptions.separate = true
+      // findOptions.separate = true
 
       const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
       findOptions.attributes = findOptions.attributes.map(attribute => {
@@ -279,7 +281,9 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
         return null
       })
         .filter(attr => attr !== null)
-      findOptions.group = query.group.map(attribute => [query.transform && attribute in query.transform ? query.transform[attribute] : attribute])
+      findOptions.group = query.group.map(attribute => query.transform && attribute in query.transform ? query.transform[attribute] : attribute)
+      console.log('group fo')
+      console.dir(findOptions, { depth: 3 })
     }
 
     // Handle the order clause
@@ -346,7 +350,6 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
     findOptions
   })
   logger.outdent()
-  // dir(findOptions)
   return findOptions
 }
 
