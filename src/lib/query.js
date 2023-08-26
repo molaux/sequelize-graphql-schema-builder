@@ -20,40 +20,40 @@ const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) =
       query.limit = parseInt(args.query.limit, 10)
       query.separate = true
     }
-    if (args.query.transform !== undefined) {
-      query.transform = {}
-      for (const attribute of Object.keys(args.query.transform)) {
-        if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
-          query.transform[attribute] = processTransform(model, args.query.transform[attribute])
-        }
-      }
-    }
+    // if (args.query.transform !== undefined) {
+    //   query.transform = {}
+    //   for (const attribute of Object.keys(args.query.transform)) {
+    //     if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
+    //       query.transform[attribute] = processTransform(model, args.query.transform[attribute])
+    //     }
+    //   }
+    // }
 
-    // Handle the group clause
-    if (args.query.group !== undefined && Array.isArray(args.query.group) && args.query.group.length) {
-      if (!query.order) {
-        query.order = []
-      }
-      // findOptions.separate = true
+    // // Handle the group clause
+    // if (args.query.group !== undefined && Array.isArray(args.query.group) && args.query.group.length) {
+    //   if (!query.order) {
+    //     query.order = []
+    //   }
+    //   // findOptions.separate = true
 
-      // const requestedAttributes = getRequestedAttributes(model, fieldNode, infos, logger)
-      // findOptions.attributes = findOptions.attributes.map(attribute => {
-      //   if (attribute in targetModel.rawAttributes &&
-      //     requestedAttributes.includes(attribute)) {
-      //     if (query.transform && attribute in query.transform) {
-      //       return [query.transform[attribute], attribute]
-      //     } else {
-      //       return attribute
-      //     }
-      //   }
+    //   // const requestedAttributes = getRequestedAttributes(model, fieldNode, infos, logger)
+    //   // findOptions.attributes = findOptions.attributes.map(attribute => {
+    //   //   if (attribute in targetModel.rawAttributes &&
+    //   //     requestedAttributes.includes(attribute)) {
+    //   //     if (query.transform && attribute in query.transform) {
+    //   //       return [query.transform[attribute], attribute]
+    //   //     } else {
+    //   //       return attribute
+    //   //     }
+    //   //   }
 
-      //   return null
-      // })
-      //   .filter(attr => attr !== null)
-      query.group = args.query.group.map(attribute => query.transform && attribute in query.transform ? query.transform[attribute] : attribute)
-      console.log('group fo')
-      console.dir(query, { depth: 3 })
-    }
+    //   //   return null
+    //   // })
+    //   //   .filter(attr => attr !== null)
+    //   query.group = args.query.group.map(attribute => query.transform && attribute in query.transform ? query.transform[attribute] : attribute)
+    //   console.log('group fo')
+    //   console.dir(query, { depth: 3 })
+    // }
   }
 
   // if (args.required !== undefined) {

@@ -100,7 +100,6 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
   logger.indent()
   delete findOptions.graphqlContext
   delete findOptions.logging
-
   if (findOptions instanceof Promise) {
     findOptions = await findOptions
   }
@@ -183,15 +182,6 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
   }
 
   if (query !== undefined) {
-    // Register transformations and aliases
-    if (query.transform !== undefined) {
-      for (const attribute of Object.keys(query.transform)) {
-        if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
-          query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
-        }
-      }
-    }
-
     // Handle the where clause
     if (query.where !== undefined) {
       findOptions.where = cleanWhereQuery(targetModel, query.where, undefined, nameFormatter, [])
@@ -265,31 +255,13 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
       if (!query.order) {
         query.order = []
       }
-      // findOptions.separate = true
-
-      const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
-      findOptions.attributes = findOptions.attributes.map(attribute => {
-        if (attribute in targetModel.rawAttributes &&
-          requestedAttributes.includes(attribute)) {
-          if (query.transform && attribute in query.transform) {
-            return [query.transform[attribute], attribute]
-          } else {
-            return attribute
-          }
-        }
-
-        return null
-      })
-        .filter(attr => attr !== null)
-      findOptions.group = query.group.map(attribute => query.transform && attribute in query.transform ? query.transform[attribute] : attribute)
-      console.log('group fo')
-      console.dir(findOptions, { depth: 3 })
+      findOptions.separate = true
+      findOptions.group = query.group
     }
 
     // Handle the order clause
     if (query.order !== undefined &&
       Array.isArray(query.order) &&
-      query.order.length &&
       query.order.reduce((ok, field) =>
         ok && Array.isArray(field) &&
         field.length === 2 &&
@@ -332,6 +304,30 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
         }
       }
       findOptions.order = orderMap
+    }
+
+    // Handle transform
+    // Register transformations and aliases
+    if (query.transform !== undefined) {
+      for (const attribute of Object.keys(query.transform)) {
+        if (!(query.transform[attribute] instanceof Sequelize.Utils.SequelizeMethod)) {
+          query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
+        }
+      }
+      const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
+      findOptions.attributes = findOptions.attributes.map(attribute => {
+        if (attribute in targetModel.rawAttributes &&
+          requestedAttributes.includes(attribute)) {
+          if (query.transform && attribute in query.transform) {
+            return [query.transform[attribute], attribute]
+          } else {
+            return attribute
+          }
+        }
+
+        return null
+      })
+        .filter(attr => attr !== null)
     }
 
     logger.log('beforeModelResolver', { query })

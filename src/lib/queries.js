@@ -21,9 +21,12 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
         ...otherFindOptions,
         attributes: getRequestedAttributes(model, infos.fieldNodes[0], infos, logger)
       }, args, ctx, infos, ...rest)
-      console.dir(findOptions, { depth: 3 })
       return findOptions
     }
+    // after: async (result, args, ctx, infos, ...rest) => {
+    //   console.log(({ result, args, ctx, infos, ...rest }))
+    //   return result
+    // }
   })(parent, args, ...rest)
 
 const countResolverFactory = (model, { nameFormatter, logger, maxManyAssociations }) => async (parent, args, ctx, infos, ...rest) => {
