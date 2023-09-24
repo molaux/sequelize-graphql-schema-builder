@@ -116,33 +116,52 @@ module.exports = {
       const foreignKey = association.options.foreignKey.name ?? association.options.foreignKey
       const isNonNull = association.associationType === 'BelongsTo' && rawFields[foreignKey] && (rawFields[foreignKey].type instanceof GraphQLNonNull)
 
-      const type = () => isMany
-        ? new GraphQLList(new InputModelAssociationType(
-          association,
-          modelsTypes[nameFormatter
-            .formatInsertInputTypeName(
-              association.target.name,
-              Object.values(association.target.associations)
-                .filter((targetAssociation) => {
-                  if (['BelongsToMany', 'HasOne'].includes(association.associationType)) {
-                    return targetAssociation.target === model
-                  }
-                  return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
-                })[0].as
-            )]))
-        : new InputModelAssociationType(
-          association,
-          modelsTypes[nameFormatter
-            .formatInsertInputTypeName(
-              association.target.name,
-              Object.values(association.target.associations)
-                .filter((targetAssociation) => {
-                  if (['BelongsToMany', 'HasOne'].includes(association.associationType)) {
-                    return targetAssociation.target === model
-                  }
-                  return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
-                })[0].as
-            )])
+      const type = () => {
+        try {
+          // console.log(
+          //   model.name,
+          //   association.associationType,
+          //   association.target.name,
+          //   Object.values(association.target.associations).map(({ target: { name }, associationType, as }) => ({ name, associationType, as })),
+          //   Object.values(association.target.associations)
+          //     .filter((targetAssociation) => {
+          //       if (['BelongsToMany', 'BelongsTo'].includes(association.associationType)) {
+          //         return targetAssociation.target === model
+          //       }
+          //       return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+          //     }))
+          return isMany
+            ? new GraphQLList(new InputModelAssociationType(
+              association,
+              modelsTypes[nameFormatter
+                .formatInsertInputTypeName(
+                  association.target.name,
+                  Object.values(association.target.associations)
+                    .filter((targetAssociation) => {
+                      if (['BelongsToMany', 'BelongsTo'].includes(targetAssociation.associationType)) {
+                        return targetAssociation.target === model
+                      }
+                      return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+                    })[0].as
+                )]))
+            : new InputModelAssociationType(
+              association,
+              modelsTypes[nameFormatter
+                .formatInsertInputTypeName(
+                  association.target.name,
+                  Object.values(association.target.associations)
+                    .filter((targetAssociation) => {
+                      if (['HasMany', 'HasOne'].includes(targetAssociation.associationType)) {
+                        return targetAssociation.target === model
+                      }
+                      return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+                    })[0].as
+                )])
+        } catch (e) {
+          console.error(`Something failed when getting association type name ${model.name} ${association.associationType} ${association.target.name}`)
+          throw e
+        }
+      }
 
       associationInsertInputFields[fieldName] = () => ({
         type: isNonNull ? new GraphQLNonNull(type()) : type()
