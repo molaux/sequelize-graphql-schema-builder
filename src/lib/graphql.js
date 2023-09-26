@@ -111,8 +111,8 @@ const parseGraphQLArgs = (arg, variables) => {
   }
 }
 
-const resolveFragments = (selections, infos) => {
-  const resolvedSelections = selections
+const resolveFragments = (selections, infos, stack) => {
+  const resolvedSelections = []
   for (const field of selections) {
     // Resolve fragments selection
     if (field.kind === 'FragmentSpread') {
@@ -120,12 +120,13 @@ const resolveFragments = (selections, infos) => {
 
       const fragmentName = field.name.value
       const fragment = infos.fragments[fragmentName]
-
       if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
-        resolvedSelections.push(...fragment.selectionSet.selections)
+        // console.log(stack)
+        resolvedSelections.push(...resolveFragments(fragment.selectionSet.selections, infos, [...(stack || []), field.name.value]))
       }
     } else {
       // console.log(`Not a fragment ${field.name.value}`)
+      resolvedSelections.push(field)
     }
   }
   return resolvedSelections
