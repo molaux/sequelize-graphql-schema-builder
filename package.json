@@ -1,6 +1,6 @@
 {
   "name": "@molaux/sequelize-graphql-schema-builder",
-  "version": "2.5.4",
+  "version": "2.5.5",
   "homepage": "https://github.com/molaux/sequelize-graphql-schema-builder",
   "repository": {
     "type": "git",

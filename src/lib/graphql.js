@@ -116,12 +116,16 @@ const resolveFragments = (selections, infos) => {
   for (const field of selections) {
     // Resolve fragments selection
     if (field.kind === 'FragmentSpread') {
+      // console.log(`Resolving fragment ${field.name.value}`)
+
       const fragmentName = field.name.value
       const fragment = infos.fragments[fragmentName]
 
       if (fragment.selectionSet !== undefined && fragment.selectionSet.selections !== undefined) {
         resolvedSelections.push(...fragment.selectionSet.selections)
       }
+    } else {
+      // console.log(`Not a fragment ${field.name.value}`)
     }
   }
   return resolvedSelections

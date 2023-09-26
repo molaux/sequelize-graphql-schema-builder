@@ -29,7 +29,8 @@ const {
 } = require('./resolvers.js')
 
 const {
-  getTargetKey
+  getTargetKey,
+  getForeignKey
 } = require('./sequelize')
 
 module.exports = {
@@ -138,10 +139,56 @@ module.exports = {
                   association.target.name,
                   Object.values(association.target.associations)
                     .filter((targetAssociation) => {
-                      if (['BelongsToMany', 'BelongsTo'].includes(targetAssociation.associationType)) {
-                        return targetAssociation.target === model
+                      if (association.associationType === 'HasMany' &&
+                        targetAssociation.associationType === 'BelongsTo') {
+                        // console.log({
+                        //   associationSource: model.name,
+                        //   associationType: association.associationType,
+                        //   associationTarget: association.target.name,
+                        //   as: association.as,
+                        //   getTargetKey: getTargetKey(association),
+                        //   targetKey: association.options.targetKey,
+                        //   sourceKey: association.options.sourceKey,
+                        //   foreignKey: getForeignKey(association)
+                        // })
+                        // console.log({
+                        //   associationSource: association.target.name,
+                        //   associationType: targetAssociation.associationType,
+                        //   associationTarget: model.name,
+                        //   as: targetAssociation.as,
+                        //   getTargetKey: getTargetKey(targetAssociation),
+                        //   targetKey: targetAssociation.options.targetKey,
+                        //   sourceKey: targetAssociation.options.sourceKey,
+                        //   foreignKey: getForeignKey(targetAssociation)
+                        // })
+                        return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
+                      } else if (association.associationType === 'BelongsToMany' &&
+                        targetAssociation.associationType === 'BelongsToMany') {
+                        // console.log({
+                        //   associationSource: model.name,
+                        //   associationType: association.associationType,
+                        //   associationTarget: association.target.name,
+                        //   as: association.as,
+                        //   getTargetKey: getTargetKey(association),
+                        //   through: association.options.through,
+                        //   targetKey: association.options.targetKey,
+                        //   sourceKey: association.options.sourceKey,
+                        //   foreignKey: getForeignKey(association)
+                        // })
+                        // console.log({
+                        //   associationSource: association.target.name,
+                        //   associationType: targetAssociation.associationType,
+                        //   associationTarget: model.name,
+                        //   as: targetAssociation.as,
+                        //   through: association.options.through.model,
+                        //   getTargetKey: getTargetKey(targetAssociation),
+                        //   targetKey: targetAssociation.options.targetKey,
+                        //   sourceKey: targetAssociation.options.sourceKey,
+                        //   foreignKey: getForeignKey(targetAssociation)
+                        // })
+                        return targetAssociation.target === model && association.options.through.model === targetAssociation.options.through.model
                       }
-                      return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+                      return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
                     })[0].as
                 )]))
             : new InputModelAssociationType(
@@ -152,9 +199,29 @@ module.exports = {
                   Object.values(association.target.associations)
                     .filter((targetAssociation) => {
                       if (['HasMany', 'HasOne'].includes(targetAssociation.associationType)) {
-                        return targetAssociation.target === model
+                        // console.log({
+                        //   associationSource: model.name,
+                        //   associationType: association.associationType,
+                        //   associationTarget: association.target.name,
+                        //   as: association.as,
+                        //   getTargetKey: getTargetKey(association),
+                        //   targetKey: association.options.targetKey,
+                        //   sourceKey: association.options.sourceKey,
+                        //   foreignKey: getForeignKey(association)
+                        // })
+                        // console.log({
+                        //   associationSource: association.target.name,
+                        //   associationType: targetAssociation.associationType,
+                        //   associationTarget: model.name,
+                        //   as: targetAssociation.as,
+                        //   getTargetKey: getTargetKey(targetAssociation),
+                        //   targetKey: targetAssociation.options.targetKey,
+                        //   sourceKey: targetAssociation.options.sourceKey,
+                        //   foreignKey: getForeignKey(targetAssociation)
+                        // })
+                        return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
                       }
-                      return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+                      return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
                     })[0].as
                 )])
         } catch (e) {

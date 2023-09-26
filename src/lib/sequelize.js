@@ -6,7 +6,9 @@ const { getFieldQuery } = require('./query')
 
 const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
 
-const getTargetKey = (association) => association.options.targetKey ?? association.target.primaryKeyAttribute
+const getTargetKey = (association) => association.options.targetKey ?? association.options.sourceKey ?? association.target.primaryKeyAttribute
+
+const getForeignKey = (association) => association.options.foreignKey?.name ?? association.options.foreignKey
 
 const inputResolver = async (input, model, inputType, { nameFormatter, logger, pubSub, transaction }) => {
   transaction = transaction ?? null
@@ -404,5 +406,6 @@ module.exports = {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,
-  getTargetKey
+  getTargetKey,
+  getForeignKey
 }
