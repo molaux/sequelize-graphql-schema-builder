@@ -137,11 +137,13 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
             return result
           }
         )
-      } else {
+      } else if (input[key]) {
         // many to one association
+        console.log(key, input[key])
         const finalType = inputType.getFields()[key].type instanceof GraphQLNonNull
           ? inputType.getFields()[key].type.ofType
           : inputType.getFields()[key].type
+
         const ofType = finalType instanceof GraphQLUnionInputType
           ? finalType.getActualType({
             fields: Object.keys(input[key]).map((field) => ({ name: { value: field } }))
