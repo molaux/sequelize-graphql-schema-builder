@@ -139,7 +139,6 @@ const inputResolver = async (input, model, inputType, { nameFormatter, logger, p
         )
       } else if (input[key]) {
         // many to one association
-        console.log(key, input[key])
         const finalType = inputType.getFields()[key].type instanceof GraphQLNonNull
           ? inputType.getFields()[key].type.ofType
           : inputType.getFields()[key].type
