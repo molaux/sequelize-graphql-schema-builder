@@ -228,8 +228,8 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           }
         } else {
           // Error !!!
-          throw Error('unknown field' + key)
-          return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
+          throw Error(`Sequelize GraphQL schema builder : unknown field «${key}»! Should be in ${Object.keys(model.rawAttributes).join(', ')}.`)
+          // return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
         }
       }
     }
