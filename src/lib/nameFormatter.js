@@ -21,6 +21,7 @@ const nameFormatterFactory = namespace => ({
   formatQueryName: function (modelName) { return this.formatModelName(modelName) },
   formatModelMetaQueryName: function (type) { return `${this.formatModelName(type)}Meta` },
   formatInsertMutationName: function (modelName) { return `create${this.formatModelName(modelName)}` },
+  formatInsertManyMutationName: function (modelName) {return `createMany${this.formatManyModelName(modelName)}` },
   formatDeleteMutationName: function (modelName) { return `delete${this.formatModelName(modelName)}` },
   formatUpdateMutationName: function (modelName) { return `update${this.formatModelName(modelName)}` },
   formatMockMutationName: function (modelName) { return `mock${this.formatModelName(modelName)}` },

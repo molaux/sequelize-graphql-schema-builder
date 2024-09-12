@@ -3,6 +3,7 @@ const {
   GraphQLBoolean
 } = require('graphql')
 const { GraphQLJSON } = require('graphql-type-json')
+const Sequelize = require('sequelize')
 
 const { cleanWhereQuery } = require('./query.js')
 
@@ -14,6 +15,7 @@ module.exports = {
   builder: (model, modelType, modelInsertInputType, modelUpdateInputType, inputModelIDTypes, manyResolver, sequelize, { nameFormatter, logger }) => {
     const deleteMutationName = nameFormatter.formatDeleteMutationName(model.name)
     const insertMutationName = nameFormatter.formatInsertMutationName(model.name)
+    const insertManyMutationName = nameFormatter.formatInsertManyMutationName(model.name)
     const updateMutationName = nameFormatter.formatUpdateMutationName(model.name)
     const mockMutationName = nameFormatter.formatMockMutationName(model.name)
 
@@ -82,7 +84,6 @@ module.exports = {
           }
         }
       },
-
       [insertMutationName]: {
         namespace: nameFormatter.formatModelName(model.name),
         type: modelType,
@@ -130,7 +131,60 @@ module.exports = {
           }
         }
       },
+      [insertManyMutationName]: {
+        namespace: nameFormatter.formatModelName(model.name),
+        type: new GraphQLList(modelType),
+        args: {
+          input: { type: new GraphQLList(modelInsertInputType) },
+          atomic: { type: GraphQLBoolean }
+        },
+        resolve: async (parent, { input: inputList, atomic }, { pubSub, ...ctx }, ...rest) => {
+          const transaction = atomic === undefined || atomic ? await sequelize.transaction() : null
 
+          try {
+            const accumulatorPubSub = pubSub
+              ? new AccumulatorPubSub()
+              : null
+            const sequelizeInputList = []
+            const resolvers = []
+
+            for (const input of inputList) {
+              const { sequelizeInput, resolvers: instanceResolvers } = await inputResolver(
+                input,
+                model,
+                modelInsertInputType,
+                { nameFormatter, logger, pubSub: accumulatorPubSub, transaction }
+              )
+              sequelizeInputList.push(sequelizeInput)
+              resolvers.push(instanceResolvers)
+            }
+            const instances = await model.bulkCreate(sequelizeInputList, { transaction })
+
+            await Promise.all(resolvers.map((instanceResolvers, i) => instanceResolvers.map(r => r(instances[i], 'set'))))
+            accumulatorPubSub?.publish('modelsCreated', { model, instances })
+
+            if (transaction) {
+              await transaction.commit()
+            }
+
+            accumulatorPubSub?.flushTo(pubSub, ctx)
+            return manyResolver(parent, {
+              query: {
+                where: {
+                  [model.primaryKeyAttribute]: {
+                    _inOp: instances.map((i) => i[model.primaryKeyAttribute])
+                  }
+                }
+              }
+            }, { pubSub, ...ctx }, ...rest)
+          } catch (error) {
+            if (transaction) {
+              await transaction.rollback()
+            }
+            throw error
+          }
+        }
+      },
       [updateMutationName]: {
         namespace: nameFormatter.formatModelName(model.name),
         type: new GraphQLList(modelType),
