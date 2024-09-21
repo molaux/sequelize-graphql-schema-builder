@@ -233,6 +233,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
         }
       }
     }
+
     return cleanedWhereClause
   } else {
     if (whereClause !== null) {
@@ -250,6 +251,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           return parseFloat(whereClause)
       }
     }
+
     return whereClause
   }
 }

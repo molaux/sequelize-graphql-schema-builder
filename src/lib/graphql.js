@@ -106,6 +106,8 @@ const parseGraphQLArgs = (arg, variables) => {
     return arg.values.map(value => parseGraphQLArgs(value, variables))
   } else if (arg.kind === 'Variable') {
     return variables[arg.name.value]
+  } else if (arg.kind === 'NullValue') {
+    return null
   } else {
     return arg.value
   }
