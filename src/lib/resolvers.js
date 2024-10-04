@@ -314,6 +314,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
           query.transform[attribute] = processTransform(targetModel, query.transform[attribute])
         }
       }
+
       const requestedAttributes = getRequestedAttributes(targetModel, infos.fieldNodes[0], infos, logger)
       findOptions.attributes = findOptions.attributes.map(attribute => {
         if (attribute in targetModel.rawAttributes &&

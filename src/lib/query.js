@@ -68,6 +68,7 @@ const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) =
 
 const processTransform = (model, transform) => {
   if (typeof transform === 'object') {
+    // console.dir({ transform }, { deth: null })
     if (Object.keys(transform).length !== 1) {
       throw new Error(`Transform clause : object should have a unique key: functionName: [ args ]. Got ${JSON.stringify(transform)}`)
     }
@@ -75,9 +76,10 @@ const processTransform = (model, transform) => {
     if (key === 'literal' && (
       !Array.isArray(transform[key]) ||
       transform[key].length !== 1 ||
-      !/^[a-z0-9_]+$/ig.test(transform[key][0])
+      (!['='].includes(transform[key][0]) &&
+        !/^[a-z0-9_]+$/ig.test(transform[key][0]))
     )) {
-      throw new Error('Literals arg is restricted to /^[a-z0-9_]+$/ regex')
+      throw new Error(`Literals arg is restricted to /^[a-z0-9_=]+$/ regex, got [${JSON.stringify(transform[key])}]`)
     }
 
     if (key === 'fn' && transform[key][0] === 'sub') {
@@ -96,6 +98,14 @@ const processTransform = (model, transform) => {
       ).join((' + ')))
     }
 
+    if (key === 'fn' && transform[key][0] === 'equals') {
+      return model.sequelize.literal(transform[key].slice(1).map(arg =>
+        typeof arg === 'object'
+          ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+          : `'${arg.replace('\'', '\\\'')}'`
+      ).join((' = ')))
+    }
+
     if (model.sequelize.options.dialect === 'mssql') {
       if (key === 'fn' && transform[key][0] === 'concat') {
         return model.sequelize.literal(transform[key].slice(1).map(arg =>
@@ -110,6 +120,8 @@ const processTransform = (model, transform) => {
     } else {
       throw Error(`${key} does not seem to be transformable...`)
     }
+  } else if (transform === '=') {
+    return Sequelize.Op.eq
   } else {
     return transform
   }
@@ -159,7 +171,10 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           throw Error(`Op ${op} doesn't exists !`)
         }
       } else {
-        if (key.indexOf('__') !== -1 || key.indexOf('!!') !== -1) {
+        if (key === '_Exp') {
+          return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, value)))
+          // return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
+        } else if (key.indexOf('__') !== -1 || key.indexOf('!!') !== -1) {
           const negative = key.indexOf('!!') !== -1
           const tokens = !negative
             ? key.split('__')
@@ -229,7 +244,6 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
         } else {
           // Error !!!
           throw Error(`Sequelize GraphQL schema builder : unknown field «${key}»! Should be in ${Object.keys(model.rawAttributes).join(', ')}.`)
-          // return model.sequelize.literal(model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, whereClause)))
         }
       }
     }
