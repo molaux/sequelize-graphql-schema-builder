@@ -30,14 +30,14 @@ const manyResolverFactory = (model, { nameFormatter, logger, maxManyAssociations
   })(parent, args, ...rest)
 
 const countResolverFactory = (model, { nameFormatter, logger, maxManyAssociations }) => async (parent, args, ctx, infos, ...rest) => {
-  const result = (await model.findOne({
-    ...(await beforeResolverFactory(model, { nameFormatter, logger, maxManyAssociations })({
-      attributes: []
-    }, args, ctx, infos, ...rest)),
-    attributes: [[Sequelize.fn('COUNT', Sequelize.col('*')), '__count__']],
-    include: []
+  const result = (await model.count({
+    ...(await beforeResolverFactory(model, { nameFormatter, logger, maxManyAssociations })({}, args, ctx, infos, ...rest)),
+    order: undefined,
+    offset: undefined,
+    limit: undefined,
+    attributes: undefined
   }))
-  return result.dataValues.__count__
+  return result
 }
 
 module.exports = {
