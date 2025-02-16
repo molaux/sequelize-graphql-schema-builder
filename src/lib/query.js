@@ -180,35 +180,42 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
             ? key.split('__')
             : key.split('!!')
 
-          const modelNames = tokens.slice(0, -1)
-          const [attribute] = tokens.slice(-1)
-          let targetModel = model
+          if (!negative && model.rawAttributes[tokens[0]]?.type instanceof Sequelize.DataTypes.JSONB) {
+            finalType = Sequelize.DataTypes.JSONB
+            const realKey = tokens.join('.')
 
-          for (const mn of modelNames) {
-            const targetModelName = nameFormatter.fieldNameToModelName(mn)
+            cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
+          } else {
+            const modelNames = tokens.slice(0, -1)
+            const [attribute] = tokens.slice(-1)
+            let targetModel = model
 
-            // Follow chain for check
-            if (targetModelName in targetModel.associations) {
-              // Associations
-              // const targetKey = getTargetKey(targetModel.associations[targetModelName])
-              // const foreignKey = targetModel.associations[targetModelName].foreignKey.name ?? targetModel.associations[targetModelName].foreignKey
-              targetModel = targetModel.associations[targetModelName].target
-            } else {
+            for (const mn of modelNames) {
+              const targetModelName = nameFormatter.fieldNameToModelName(mn)
+
+              // Follow chain for check
+              if (targetModelName in targetModel.associations) {
+                // Associations
+                // const targetKey = getTargetKey(targetModel.associations[targetModelName])
+                // const foreignKey = targetModel.associations[targetModelName].foreignKey.name ?? targetModel.associations[targetModelName].foreignKey
+                targetModel = targetModel.associations[targetModelName].target
+              } else {
+                throw Error(`Composed key ${key} is not accessible`)
+              }
+            }
+
+            if (!(attribute in targetModel.rawAttributes)) {
               throw Error(`Composed key ${key} is not accessible`)
             }
-          }
 
-          if (!(attribute in targetModel.rawAttributes)) {
-            throw Error(`Composed key ${key} is not accessible`)
+            finalType = targetModel.rawAttributes[attribute].type
+            // if (nestedKeys.length) {
+            //   throw Error('You cannot use nested column into included models at the present time')
+            // }
+            const symbol = negative ? '!' : '#'
+            realKey = `${symbol}${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}${symbol}`
+            cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
           }
-
-          finalType = targetModel.rawAttributes[attribute].type
-          // if (nestedKeys.length) {
-          //   throw Error('You cannot use nested column into included models at the present time')
-          // }
-          const symbol = negative ? '!' : '#'
-          realKey = `${symbol}${[...nestedKeys || [], ...modelNames, targetModel.rawAttributes[attribute].field].join('.')}${symbol}`
-          cleanedWhereClause[realKey] = cleanWhereQuery(model, value, finalType, nameFormatter, nestedKeys)
         } else if (key in model.rawAttributes) {
           // it's not an operator so is it a field of model ?
           realKey = key
@@ -263,6 +270,9 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
           return parseInt(whereClause, 10)
         case 'DECIMAL':
           return parseFloat(whereClause)
+        case 'JSONB':
+          // We may have to use some kinf of typing syntax as JSONB does not provide fields types
+          return whereClause
       }
     }
 
