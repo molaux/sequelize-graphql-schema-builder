@@ -220,6 +220,7 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
 
     // Handle the without clause
     if (query.without !== undefined) {
+      console.log(query.without)
       const includes = query.without.map(clause => ({
         model: targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target,
         // as: targetModel.associations[fieldName].as,
@@ -231,12 +232,13 @@ const beforeModelResolverFactory = (targetModel, { nameFormatter, logger }) => a
           : {}),
         required: false
       }))
+      console.log(query.without)
 
       findOptions.where = query.without.reduce((whereClause, clause) => ({
         [Sequelize.Op.and]: [
           whereClause,
           targetModel.sequelize.where(
-            targetModel.sequelize.col(nameFormatter.fieldNameToModelName(clause.field ?? clause) + '.' + targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target.rawAttributes[targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].options.foreignKey].field),
+            targetModel.sequelize.col(nameFormatter.fieldNameToModelName(clause.field ?? clause) + '.' + targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].target.rawAttributes[targetModel.associations[nameFormatter.fieldNameToModelName(clause.field ?? clause)].options.targetKey].field),
             'IS',
             null)
         ]
