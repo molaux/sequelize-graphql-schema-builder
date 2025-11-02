@@ -63,7 +63,7 @@ const instancesResolverFactory = (model, manyResolver, contextFilter) => (payloa
 }
 
 const subscribeToModelInstancesFactory = (model, action, contextFilter) => (payload, args, { pubSub, ...ctx }, ...rest) => withFilter(
-  () => pubSub.asyncIterator(action),
+  () => pubSub.asyncIterableIterator(action),
   (payloads) => payloads.reduce(
     (keep, { model: { name: payloadModelName }, emitterContext }) => (keep || payloadModelName === model.name) &&
       (!contextFilter || contextFilter(emitterContext, { pubSub, ...ctx }, args, model, payload)),
