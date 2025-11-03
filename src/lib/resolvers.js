@@ -1,11 +1,12 @@
 'use strict'
-const Sequelize = require('sequelize')
-const { getRequestedAttributes } = require('./graphql')
-const { getNestedElements } = require('./sequelize')
-const { cleanWhereQuery, processTransform, getDottedKeys } = require('./query')
+import Sequelize from 'sequelize'
+import isDeepEqual from 'deep-eql'
+import deepmerge from 'deepmerge'
+
+import { getRequestedAttributes } from './graphql.js'
+import { getNestedElements } from './sequelize.js'
+import { cleanWhereQuery, processTransform, getDottedKeys } from './query.js'
 // const { dir } = require('./logger')
-const isDeepEqual = require('deep-eql')
-const deepmerge = require('deepmerge')
 
 const copyInclude = ({ attributes, include, where, ...rest }) => ({
   attributes: [...attributes ?? []],
@@ -381,10 +382,11 @@ const findOptionsMerger = (fo1, fo2) => {
   return findOptions
 }
 
-module.exports = {
+export {
   beforeAssociationResolverFactory,
   includesMerger,
   findOptionsMerger,
-  beforeModelResolverFactory,
-  beforeResolverFactory: (model, options) => (...args) => beforeModelResolverFactory(model, options)(beforeAssociationResolverFactory(model, options)(...args), ...args.slice(1))
+  beforeModelResolverFactory
 }
+
+export const beforeResolverFactory = (model, options) => (...args) => beforeModelResolverFactory(model, options)(beforeAssociationResolverFactory(model, options)(...args), ...args.slice(1))

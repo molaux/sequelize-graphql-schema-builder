@@ -1,4 +1,4 @@
-const util = require('util')
+import util from 'util'
 
 const loggerFactory = active => ({
   log: active
@@ -13,6 +13,7 @@ const loggerFactory = active => ({
     ? console.groupEnd()
     : () => null
 })
+
 const recDir = (o, indent) => {
   const prefix = new Array((indent ?? 0) + 1).join(' ')
   const indentWrite = (s) => process.stdout.write(`${prefix}${s}`)
@@ -60,7 +61,7 @@ const dir = (...args) => {
   console.log()
 }
 
-module.exports = {
+export {
   loggerFactory,
   dir
 }

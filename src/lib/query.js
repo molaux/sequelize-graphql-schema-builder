@@ -1,5 +1,5 @@
-const Sequelize = require('sequelize')
-const { parseGraphQLArgs } = require('./graphql')
+import Sequelize from 'sequelize'
+import { parseGraphQLArgs } from './graphql.js'
 
 const getFieldQuery = (model, fieldNode, variables, nameFormatter, nestedKeys) => {
   let query = null
@@ -280,7 +280,7 @@ const cleanWhereQuery = (model, whereClause, type, nameFormatter, nestedKeys) =>
   }
 }
 
-module.exports = {
+export {
   getFieldQuery,
   cleanWhereQuery,
   getDottedKeys,

@@ -1,361 +1,360 @@
-const {
+import {
   GraphQLInputObjectType,
   GraphQLObjectType,
   GraphQLBoolean,
   GraphQLList,
   GraphQLNonNull,
   GraphQLID
-} = require('graphql')
+} from 'graphql'
 
-const { GraphQLJSON } = require('graphql-type-json')
-const { attributeFields, resolver } = require('graphql-sequelize')
-const pluralize = require('pluralize')
+import { GraphQLJSON } from 'graphql-type-json'
+import pluralize from 'pluralize'
 
-const {
+import {
   getInsertInputFields,
   getUpdateInputFields
-} = require('./graphql.js')
+} from './graphql.js'
 
-const {
+import {
   InputModelAssociationType
-} = require('./InputModelAssociationType')
+} from './InputModelAssociationType.js'
 
-const {
+import {
   InputModelIDTypeFactory
-} = require('./InputModelIDType')
+} from './InputModelIDType.js'
 
-const {
+import {
   beforeResolverFactory
-} = require('./resolvers.js')
+} from './resolvers.js'
 
-const {
-  getTargetKey,
+import {
   getForeignKey
-} = require('./sequelize')
+} from './sequelize.js'
 
-module.exports = {
-  builder: (model, modelsTypes, typesCache, extraModelFields, { nameFormatter, logger, maxManyAssociations }) => {
-    const associationFields = {}
-    const inputModelIDTypes = []
-    for (const associationName in model.associations) {
-      const association = model.associations[associationName]
-      // Add assotiation fields to request and get it post computed to avoid circular dependance
-      const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
-      const fieldName = nameFormatter.modelNameToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
+import graphQLSequelizePkg from 'graphql-sequelize'
+const { attributeFields, resolver } = graphQLSequelizePkg
 
-      // Object.defineProperty(model, fieldName, { get: () => model[association.accessors.get]() })
-      associationFields[fieldName] = () => ({
-        type: isMany
-          ? new GraphQLList(modelsTypes[nameFormatter.formatTypeName(association.target.name)])
-          : modelsTypes[nameFormatter.formatTypeName(association.target.name)],
-        args: {
-          query: { type: GraphQLJSON },
-          dissociate: { type: GraphQLBoolean }
-        },
-        resolve: (...args) => resolver(association, {
-          before: beforeResolverFactory(association.target, { nameFormatter, logger, maxManyAssociations })
-        })(...args)
-      })
+export const builder = (model, modelsTypes, typesCache, extraModelFields, { nameFormatter, logger, maxManyAssociations }) => {
+  const associationFields = {}
+  const inputModelIDTypes = []
+  for (const associationName in model.associations) {
+    const association = model.associations[associationName]
+    // Add assotiation fields to request and get it post computed to avoid circular dependance
+    const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
+    const fieldName = nameFormatter.modelNameToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
 
-      inputModelIDTypes.push(new InputModelIDTypeFactory(association))
-    }
-
-    // Add to base model type : its own field and association fields as post computable fields
-    // to avoid circular dependancies
-
-    const rawFields = attributeFields(model, { cache: typesCache })
-    const rawFieldsWithoutFks = { ...rawFields }
-    const associationsFk = new Set(Object.values(model.associations)
-      .filter(({ associationType }) => associationType === 'BelongsTo')
-      .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
-
-    for (const field in rawFields) {
-      if (model.rawAttributes[field].primaryKey || associationsFk.has(field)) {
-        rawFields[field].type = rawFields[field].type instanceof GraphQLNonNull
-          ? new GraphQLNonNull(GraphQLID)
-          : GraphQLID
-      }
-      // remove association fields
-      if (associationsFk.has(field) && !model.rawAttributes[field].primaryKey) {
-        delete rawFieldsWithoutFks[field]
-      }
-    }
-
-    const modelType = new GraphQLObjectType({
-      name: nameFormatter.formatTypeName(model.name),
-      description: `${model.name} type`,
-      fields: () => ({
-        ...rawFieldsWithoutFks,
-        ...extraModelFields({ modelsTypes, nameFormatter, logger }, model),
-        ...Object.keys(associationFields).reduce((o, associationField) => {
-          o[associationField] = associationFields[associationField]()
-          return o
-        }, {})
-      })
-    })
-
-    const modelIDType = new GraphQLObjectType({
-      name: `${nameFormatter.formatTypeName(model.name)}ID`,
-      description: `${model.name} ID type`,
-      fields: () => ({
-        [model.primaryKeyAttribute]: {
-          type: GraphQLID
-        }
-      })
-    })
-
-    // Input types
-    const associationsFieldsTypeMap = new Map()
-    const associationInsertInputFields = {}
-    const associationUpdateInputFields = {}
-    const associationRemovableModelIDInputFields = {}
-    for (const associationName in model.associations) {
-      const association = model.associations[associationName]
-      const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
-      const fieldName = nameFormatter.modelNameToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
-      associationsFieldsTypeMap.set(fieldName, association.as)
-      const foreignKey = association.options.foreignKey.name ?? association.options.foreignKey
-      const isNonNull = association.associationType === 'BelongsTo' && rawFields[foreignKey] && (rawFields[foreignKey].type instanceof GraphQLNonNull)
-
-      const type = () => {
-        try {
-          // console.log(
-          //   model.name,
-          //   association.associationType,
-          //   association.target.name,
-          //   Object.values(association.target.associations).map(({ target: { name }, associationType, as }) => ({ name, associationType, as })),
-          //   Object.values(association.target.associations)
-          //     .filter((targetAssociation) => {
-          //       if (['BelongsToMany', 'BelongsTo'].includes(association.associationType)) {
-          //         return targetAssociation.target === model
-          //       }
-          //       return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
-          //     }))
-          return isMany
-            ? new GraphQLList(new InputModelAssociationType(
-              association,
-              modelsTypes[nameFormatter
-                .formatInsertInputTypeName(
-                  association.target.name,
-                  Object.values(association.target.associations)
-                    .filter((targetAssociation) => {
-                      if (association.associationType === 'HasMany' &&
-                        targetAssociation.associationType === 'BelongsTo') {
-                        // console.log({
-                        //   associationSource: model.name,
-                        //   associationType: association.associationType,
-                        //   associationTarget: association.target.name,
-                        //   as: association.as,
-                        //   getTargetKey: getTargetKey(association),
-                        //   targetKey: association.options.targetKey,
-                        //   sourceKey: association.options.sourceKey,
-                        //   foreignKey: getForeignKey(association)
-                        // })
-                        // console.log({
-                        //   associationSource: association.target.name,
-                        //   associationType: targetAssociation.associationType,
-                        //   associationTarget: model.name,
-                        //   as: targetAssociation.as,
-                        //   getTargetKey: getTargetKey(targetAssociation),
-                        //   targetKey: targetAssociation.options.targetKey,
-                        //   sourceKey: targetAssociation.options.sourceKey,
-                        //   foreignKey: getForeignKey(targetAssociation)
-                        // })
-                        return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
-                      } else if (association.associationType === 'BelongsToMany' &&
-                        targetAssociation.associationType === 'BelongsToMany') {
-                        // console.log({
-                        //   associationSource: model.name,
-                        //   associationType: association.associationType,
-                        //   associationTarget: association.target.name,
-                        //   as: association.as,
-                        //   getTargetKey: getTargetKey(association),
-                        //   through: association.options.through,
-                        //   targetKey: association.options.targetKey,
-                        //   sourceKey: association.options.sourceKey,
-                        //   foreignKey: getForeignKey(association)
-                        // })
-                        // console.log({
-                        //   associationSource: association.target.name,
-                        //   associationType: targetAssociation.associationType,
-                        //   associationTarget: model.name,
-                        //   as: targetAssociation.as,
-                        //   through: association.options.through.model,
-                        //   getTargetKey: getTargetKey(targetAssociation),
-                        //   targetKey: targetAssociation.options.targetKey,
-                        //   sourceKey: targetAssociation.options.sourceKey,
-                        //   foreignKey: getForeignKey(targetAssociation)
-                        // })
-                        return targetAssociation.target === model && association.options.through.model === targetAssociation.options.through.model
-                      }
-                      return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
-                    })[0].as
-                )]))
-            : new InputModelAssociationType(
-              association,
-              modelsTypes[nameFormatter
-                .formatInsertInputTypeName(
-                  association.target.name,
-                  Object.values(association.target.associations)
-                    .filter((targetAssociation) => {
-                      if (['HasMany', 'HasOne'].includes(targetAssociation.associationType)) {
-                        // console.log({
-                        //   associationSource: model.name,
-                        //   associationType: association.associationType,
-                        //   associationTarget: association.target.name,
-                        //   as: association.as,
-                        //   getTargetKey: getTargetKey(association),
-                        //   targetKey: association.options.targetKey,
-                        //   sourceKey: association.options.sourceKey,
-                        //   foreignKey: getForeignKey(association)
-                        // })
-                        // console.log({
-                        //   associationSource: association.target.name,
-                        //   associationType: targetAssociation.associationType,
-                        //   associationTarget: model.name,
-                        //   as: targetAssociation.as,
-                        //   getTargetKey: getTargetKey(targetAssociation),
-                        //   targetKey: targetAssociation.options.targetKey,
-                        //   sourceKey: targetAssociation.options.sourceKey,
-                        //   foreignKey: getForeignKey(targetAssociation)
-                        // })
-                        return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
-                      }
-                      return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
-                    })[0].as
-                )])
-        } catch (e) {
-          console.error(`Something failed when getting association type name ${model.name} ${association.associationType} ${association.target.name}`)
-          throw e
-        }
-      }
-
-      associationInsertInputFields[fieldName] = () => ({
-        type: isNonNull ? new GraphQLNonNull(type()) : type()
-      })
-
-      associationUpdateInputFields[fieldName] = () => ({
-        type: type()
-      })
-
-      if (association.associationType === 'BelongsToMany') {
-        // Association can be removed from this side
-        associationRemovableModelIDInputFields[fieldName] = () => ({
-          type: new GraphQLList(new InputModelIDTypeFactory(association))
-        })
-      }
-    }
-
-    const modelInsertInputType = new GraphQLInputObjectType({
-      name: nameFormatter.formatInsertInputTypeName(model.name),
-      description: `${model.name} insert input type`,
-      fields: () => ({
-        ...getInsertInputFields(model, { cache: typesCache, nameFormatter }),
-        // ...extraModelFields({ modelTypes, nameFormatter, logger }, model)
-        ...Object.keys(associationInsertInputFields).reduce((o, associationField) => {
-          o[associationField] = associationInsertInputFields[associationField]()
-          return o
-        }, {})
-      })
-    })
-
-    const modelInsertInputTypeThroughModels = []
-    for (const associationName in model.associations) {
-      const association = model.associations[associationName]
-      const inputFields = getInsertInputFields(model, { cache: typesCache, nameFormatter })
-      if (association.associationType === 'BelongsTo') {
-        delete inputFields[association.options.foreignKey.name || association.options.foreignKey]
-      }
-      modelInsertInputTypeThroughModels.push(new GraphQLInputObjectType({
-        name: nameFormatter.formatInsertInputTypeName(model.name, association.as),
-        description: `${model.name} insert input type through ${association.as}`,
-        fields: () => ({
-          ...inputFields,
-          ...Object
-            .keys(associationInsertInputFields)
-            .filter((associationField) => associationsFieldsTypeMap.get(associationField) !== association.as)
-            .reduce((o, associationField) => {
-              o[associationField] = associationInsertInputFields[associationField]()
-              return o
-            }, {})
-        })
-      }))
-    }
-
-    const modelUpdateInputType = new GraphQLInputObjectType({
-      name: nameFormatter.formatUpdateInputTypeName(model.name),
-      description: `${model.name} update input type`,
-      fields: () => ({
-        ...getUpdateInputFields(model, { cache: typesCache }),
-        ...Object.keys(associationUpdateInputFields).reduce((o, associationField) => {
-          o[associationField] = associationUpdateInputFields[associationField]()
-          if (o[associationField].type instanceof GraphQLList) {
-            o[`add${associationField}`] = associationUpdateInputFields[associationField]()
-            if (associationRemovableModelIDInputFields[associationField] !== undefined) {
-              o[`remove${associationField}`] = associationRemovableModelIDInputFields[associationField]()
-            }
-          }
-          return o
-        }, {})
-      })
-    })
-
-    const modelValidatorType = new GraphQLObjectType({
-      name: nameFormatter.formatValidatorTypeName(model.name),
-      description: `Represents ${model.name} fields validators`,
-      fields: () => Object.keys(model.rawAttributes).reduce((o, attribute) => ({
-        ...o,
-        [attribute]: { type: GraphQLJSON }
-      }), {})
-    })
-
-    const attributes = attributeFields(model, { cache: typesCache })
-    const defaultableFields = Object.keys(model.rawAttributes)
-      .filter((attribute) => model.rawAttributes[attribute].defaultValue !== undefined &&
-      !model.rawAttributes[attribute].primaryKey &&
-      !model.rawAttributes[attribute].autoIncrement)
-    const modelDefaultValueType = defaultableFields.length
-      ? new GraphQLObjectType({
-        name: nameFormatter.formatDefaultValueTypeName(model.name),
-        description: `Exposes ${model.name} default fields values`,
-        fields: () => defaultableFields
-          .reduce((o, attribute) => ({
-            ...o,
-            [attribute]: {
-              type: attributes[attribute].type instanceof GraphQLNonNull
-                ? attributes[attribute].type
-                : new GraphQLNonNull(attributes[attribute].type)
-            }
-          }), {})
-      })
-      : null
-
-    const modelMetaType = new GraphQLObjectType({
-      name: nameFormatter.formatMetaTypeName(model.name),
-      description: `Represents ${model.name} meta informations`,
-      fields: () => ({
-        validators: { type: modelValidatorType },
-        ...modelDefaultValueType
-          ? { defaultValues: { type: modelDefaultValueType } }
-          : null
-      })
-    })
-
-    // keep a trace of models to reuse in associations
-    return {
-      modelTypes: {
-        [nameFormatter.formatTypeName(model.name)]: modelType,
-        [`${nameFormatter.formatTypeName(model.name)}ID`]: modelIDType,
-        [nameFormatter.formatInsertInputTypeName(model.name)]: modelInsertInputType,
-        [nameFormatter.formatUpdateInputTypeName(model.name)]: modelUpdateInputType,
-        [nameFormatter.formatMetaTypeName(model.name)]: modelMetaType
+    // Object.defineProperty(model, fieldName, { get: () => model[association.accessors.get]() })
+    associationFields[fieldName] = () => ({
+      type: isMany
+        ? new GraphQLList(modelsTypes[nameFormatter.formatTypeName(association.target.name)])
+        : modelsTypes[nameFormatter.formatTypeName(association.target.name)],
+      args: {
+        query: { type: GraphQLJSON },
+        dissociate: { type: GraphQLBoolean }
       },
-      modelType,
-      modelMetaType,
-      modelIDType,
-      modelInsertInputType,
-      modelUpdateInputType,
-      ghostTypes: inputModelIDTypes.concat(modelInsertInputTypeThroughModels)
+      resolve: (...args) => resolver(association, {
+        before: beforeResolverFactory(association.target, { nameFormatter, logger, maxManyAssociations })
+      })(...args)
+    })
+
+    inputModelIDTypes.push(new InputModelIDTypeFactory(association))
+  }
+
+  // Add to base model type : its own field and association fields as post computable fields
+  // to avoid circular dependancies
+
+  const rawFields = attributeFields(model, { cache: typesCache })
+  const rawFieldsWithoutFks = { ...rawFields }
+  const associationsFk = new Set(Object.values(model.associations)
+    .filter(({ associationType }) => associationType === 'BelongsTo')
+    .map(({ options: { foreignKey } }) => foreignKey.name ?? foreignKey))
+
+  for (const field in rawFields) {
+    if (model.rawAttributes[field].primaryKey || associationsFk.has(field)) {
+      rawFields[field].type = rawFields[field].type instanceof GraphQLNonNull
+        ? new GraphQLNonNull(GraphQLID)
+        : GraphQLID
     }
+    // remove association fields
+    if (associationsFk.has(field) && !model.rawAttributes[field].primaryKey) {
+      delete rawFieldsWithoutFks[field]
+    }
+  }
+
+  const modelType = new GraphQLObjectType({
+    name: nameFormatter.formatTypeName(model.name),
+    description: `${model.name} type`,
+    fields: () => ({
+      ...rawFieldsWithoutFks,
+      ...extraModelFields({ modelsTypes, nameFormatter, logger }, model),
+      ...Object.keys(associationFields).reduce((o, associationField) => {
+        o[associationField] = associationFields[associationField]()
+        return o
+      }, {})
+    })
+  })
+
+  const modelIDType = new GraphQLObjectType({
+    name: `${nameFormatter.formatTypeName(model.name)}ID`,
+    description: `${model.name} ID type`,
+    fields: () => ({
+      [model.primaryKeyAttribute]: {
+        type: GraphQLID
+      }
+    })
+  })
+
+  // Input types
+  const associationsFieldsTypeMap = new Map()
+  const associationInsertInputFields = {}
+  const associationUpdateInputFields = {}
+  const associationRemovableModelIDInputFields = {}
+  for (const associationName in model.associations) {
+    const association = model.associations[associationName]
+    const isMany = ['HasMany', 'BelongsToMany'].includes(association.associationType)
+    const fieldName = nameFormatter.modelNameToFieldName(isMany ? pluralize(association.as) : association.as, association.as)
+    associationsFieldsTypeMap.set(fieldName, association.as)
+    const foreignKey = association.options.foreignKey.name ?? association.options.foreignKey
+    const isNonNull = association.associationType === 'BelongsTo' && rawFields[foreignKey] && (rawFields[foreignKey].type instanceof GraphQLNonNull)
+
+    const type = () => {
+      try {
+        // console.log(
+        //   model.name,
+        //   association.associationType,
+        //   association.target.name,
+        //   Object.values(association.target.associations).map(({ target: { name }, associationType, as }) => ({ name, associationType, as })),
+        //   Object.values(association.target.associations)
+        //     .filter((targetAssociation) => {
+        //       if (['BelongsToMany', 'BelongsTo'].includes(association.associationType)) {
+        //         return targetAssociation.target === model
+        //       }
+        //       return model.name === targetAssociation.target.name && getTargetKey(targetAssociation) === getTargetKey(association)
+        //     }))
+        return isMany
+          ? new GraphQLList(new InputModelAssociationType(
+            association,
+            modelsTypes[nameFormatter
+              .formatInsertInputTypeName(
+                association.target.name,
+                Object.values(association.target.associations)
+                  .filter((targetAssociation) => {
+                    if (association.associationType === 'HasMany' &&
+                      targetAssociation.associationType === 'BelongsTo') {
+                      // console.log({
+                      //   associationSource: model.name,
+                      //   associationType: association.associationType,
+                      //   associationTarget: association.target.name,
+                      //   as: association.as,
+                      //   getTargetKey: getTargetKey(association),
+                      //   targetKey: association.options.targetKey,
+                      //   sourceKey: association.options.sourceKey,
+                      //   foreignKey: getForeignKey(association)
+                      // })
+                      // console.log({
+                      //   associationSource: association.target.name,
+                      //   associationType: targetAssociation.associationType,
+                      //   associationTarget: model.name,
+                      //   as: targetAssociation.as,
+                      //   getTargetKey: getTargetKey(targetAssociation),
+                      //   targetKey: targetAssociation.options.targetKey,
+                      //   sourceKey: targetAssociation.options.sourceKey,
+                      //   foreignKey: getForeignKey(targetAssociation)
+                      // })
+                      return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
+                    } else if (association.associationType === 'BelongsToMany' &&
+                      targetAssociation.associationType === 'BelongsToMany') {
+                      // console.log({
+                      //   associationSource: model.name,
+                      //   associationType: association.associationType,
+                      //   associationTarget: association.target.name,
+                      //   as: association.as,
+                      //   getTargetKey: getTargetKey(association),
+                      //   through: association.options.through,
+                      //   targetKey: association.options.targetKey,
+                      //   sourceKey: association.options.sourceKey,
+                      //   foreignKey: getForeignKey(association)
+                      // })
+                      // console.log({
+                      //   associationSource: association.target.name,
+                      //   associationType: targetAssociation.associationType,
+                      //   associationTarget: model.name,
+                      //   as: targetAssociation.as,
+                      //   through: association.options.through.model,
+                      //   getTargetKey: getTargetKey(targetAssociation),
+                      //   targetKey: targetAssociation.options.targetKey,
+                      //   sourceKey: targetAssociation.options.sourceKey,
+                      //   foreignKey: getForeignKey(targetAssociation)
+                      // })
+                      return targetAssociation.target === model && association.options.through.model === targetAssociation.options.through.model
+                    }
+                    return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
+                  })[0].as
+              )]))
+          : new InputModelAssociationType(
+            association,
+            modelsTypes[nameFormatter
+              .formatInsertInputTypeName(
+                association.target.name,
+                Object.values(association.target.associations)
+                  .filter((targetAssociation) => {
+                    if (['HasMany', 'HasOne'].includes(targetAssociation.associationType)) {
+                      // console.log({
+                      //   associationSource: model.name,
+                      //   associationType: association.associationType,
+                      //   associationTarget: association.target.name,
+                      //   as: association.as,
+                      //   getTargetKey: getTargetKey(association),
+                      //   targetKey: association.options.targetKey,
+                      //   sourceKey: association.options.sourceKey,
+                      //   foreignKey: getForeignKey(association)
+                      // })
+                      // console.log({
+                      //   associationSource: association.target.name,
+                      //   associationType: targetAssociation.associationType,
+                      //   associationTarget: model.name,
+                      //   as: targetAssociation.as,
+                      //   getTargetKey: getTargetKey(targetAssociation),
+                      //   targetKey: targetAssociation.options.targetKey,
+                      //   sourceKey: targetAssociation.options.sourceKey,
+                      //   foreignKey: getForeignKey(targetAssociation)
+                      // })
+                      return targetAssociation.target === model && getForeignKey(targetAssociation) === getForeignKey(association)
+                    }
+                    return model.name === targetAssociation.target.name && getForeignKey(targetAssociation) === getForeignKey(association)
+                  })[0].as
+              )])
+      } catch (e) {
+        console.error(`Something failed when getting association type name ${model.name} ${association.associationType} ${association.target.name}`)
+        throw e
+      }
+    }
+
+    associationInsertInputFields[fieldName] = () => ({
+      type: isNonNull ? new GraphQLNonNull(type()) : type()
+    })
+
+    associationUpdateInputFields[fieldName] = () => ({
+      type: type()
+    })
+
+    if (association.associationType === 'BelongsToMany') {
+      // Association can be removed from this side
+      associationRemovableModelIDInputFields[fieldName] = () => ({
+        type: new GraphQLList(new InputModelIDTypeFactory(association))
+      })
+    }
+  }
+
+  const modelInsertInputType = new GraphQLInputObjectType({
+    name: nameFormatter.formatInsertInputTypeName(model.name),
+    description: `${model.name} insert input type`,
+    fields: () => ({
+      ...getInsertInputFields(model, { cache: typesCache, nameFormatter }),
+      // ...extraModelFields({ modelTypes, nameFormatter, logger }, model)
+      ...Object.keys(associationInsertInputFields).reduce((o, associationField) => {
+        o[associationField] = associationInsertInputFields[associationField]()
+        return o
+      }, {})
+    })
+  })
+
+  const modelInsertInputTypeThroughModels = []
+  for (const associationName in model.associations) {
+    const association = model.associations[associationName]
+    const inputFields = getInsertInputFields(model, { cache: typesCache, nameFormatter })
+    if (association.associationType === 'BelongsTo') {
+      delete inputFields[association.options.foreignKey.name || association.options.foreignKey]
+    }
+    modelInsertInputTypeThroughModels.push(new GraphQLInputObjectType({
+      name: nameFormatter.formatInsertInputTypeName(model.name, association.as),
+      description: `${model.name} insert input type through ${association.as}`,
+      fields: () => ({
+        ...inputFields,
+        ...Object
+          .keys(associationInsertInputFields)
+          .filter((associationField) => associationsFieldsTypeMap.get(associationField) !== association.as)
+          .reduce((o, associationField) => {
+            o[associationField] = associationInsertInputFields[associationField]()
+            return o
+          }, {})
+      })
+    }))
+  }
+
+  const modelUpdateInputType = new GraphQLInputObjectType({
+    name: nameFormatter.formatUpdateInputTypeName(model.name),
+    description: `${model.name} update input type`,
+    fields: () => ({
+      ...getUpdateInputFields(model, { cache: typesCache }),
+      ...Object.keys(associationUpdateInputFields).reduce((o, associationField) => {
+        o[associationField] = associationUpdateInputFields[associationField]()
+        if (o[associationField].type instanceof GraphQLList) {
+          o[`add${associationField}`] = associationUpdateInputFields[associationField]()
+          if (associationRemovableModelIDInputFields[associationField] !== undefined) {
+            o[`remove${associationField}`] = associationRemovableModelIDInputFields[associationField]()
+          }
+        }
+        return o
+      }, {})
+    })
+  })
+
+  const modelValidatorType = new GraphQLObjectType({
+    name: nameFormatter.formatValidatorTypeName(model.name),
+    description: `Represents ${model.name} fields validators`,
+    fields: () => Object.keys(model.rawAttributes).reduce((o, attribute) => ({
+      ...o,
+      [attribute]: { type: GraphQLJSON }
+    }), {})
+  })
+
+  const attributes = attributeFields(model, { cache: typesCache })
+  const defaultableFields = Object.keys(model.rawAttributes)
+    .filter((attribute) => model.rawAttributes[attribute].defaultValue !== undefined &&
+    !model.rawAttributes[attribute].primaryKey &&
+    !model.rawAttributes[attribute].autoIncrement)
+  const modelDefaultValueType = defaultableFields.length
+    ? new GraphQLObjectType({
+      name: nameFormatter.formatDefaultValueTypeName(model.name),
+      description: `Exposes ${model.name} default fields values`,
+      fields: () => defaultableFields
+        .reduce((o, attribute) => ({
+          ...o,
+          [attribute]: {
+            type: attributes[attribute].type instanceof GraphQLNonNull
+              ? attributes[attribute].type
+              : new GraphQLNonNull(attributes[attribute].type)
+          }
+        }), {})
+    })
+    : null
+
+  const modelMetaType = new GraphQLObjectType({
+    name: nameFormatter.formatMetaTypeName(model.name),
+    description: `Represents ${model.name} meta informations`,
+    fields: () => ({
+      validators: { type: modelValidatorType },
+      ...modelDefaultValueType
+        ? { defaultValues: { type: modelDefaultValueType } }
+        : null
+    })
+  })
+
+  // keep a trace of models to reuse in associations
+  return {
+    modelTypes: {
+      [nameFormatter.formatTypeName(model.name)]: modelType,
+      [`${nameFormatter.formatTypeName(model.name)}ID`]: modelIDType,
+      [nameFormatter.formatInsertInputTypeName(model.name)]: modelInsertInputType,
+      [nameFormatter.formatUpdateInputTypeName(model.name)]: modelUpdateInputType,
+      [nameFormatter.formatMetaTypeName(model.name)]: modelMetaType
+    },
+    modelType,
+    modelMetaType,
+    modelIDType,
+    modelInsertInputType,
+    modelUpdateInputType,
+    ghostTypes: inputModelIDTypes.concat(modelInsertInputTypeThroughModels)
   }
 }

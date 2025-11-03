@@ -1,6 +1,6 @@
-const { GraphQLList } = require('graphql')
-const { withFilter } = require('graphql-subscriptions')
-const { GraphQLJSON } = require('graphql-type-json')
+import { GraphQLList } from 'graphql'
+import { withFilter } from 'graphql-subscriptions'
+import { GraphQLJSON } from 'graphql-type-json'
 
 const AccumulatorPubSub = function () {
   this.register = []
@@ -71,48 +71,48 @@ const subscribeToModelInstancesFactory = (model, action, contextFilter) => (payl
   )
 )(payload, args, { pubSub, ...ctx }, ...rest)
 
-module.exports = {
+export {
   AccumulatorPubSub,
   payloadsReducer,
   instancesResolverFactory,
-  subscribeToModelInstancesFactory,
-  builder: (model, modelType, modelIDType, manyResolver, { nameFormatter, contextFilter }) => {
-    const createdModelSubscriptionName = nameFormatter.formatCreatedSubscriptionName(model.name)
-    const updatedModelSubscriptionName = nameFormatter.formatUpdatedSubscriptionName(model.name)
-    const deletedModelSubscriptionName = nameFormatter.formatDeletedSubscriptionName(model.name)
+  subscribeToModelInstancesFactory
+}
+export const builder = (model, modelType, modelIDType, manyResolver, { nameFormatter, contextFilter }) => {
+  const createdModelSubscriptionName = nameFormatter.formatCreatedSubscriptionName(model.name)
+  const updatedModelSubscriptionName = nameFormatter.formatUpdatedSubscriptionName(model.name)
+  const deletedModelSubscriptionName = nameFormatter.formatDeletedSubscriptionName(model.name)
 
-    return {
-      [createdModelSubscriptionName]: {
-        namespace: nameFormatter.formatModelName(model.name),
-        args: {
-          query: { type: GraphQLJSON },
-          config: { type: GraphQLJSON }
-        },
-        type: new GraphQLList(modelType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated', contextFilter),
-        resolve: instancesResolverFactory(model, manyResolver, contextFilter)
+  return {
+    [createdModelSubscriptionName]: {
+      namespace: nameFormatter.formatModelName(model.name),
+      args: {
+        query: { type: GraphQLJSON },
+        config: { type: GraphQLJSON }
       },
+      type: new GraphQLList(modelType),
+      subscribe: subscribeToModelInstancesFactory(model, 'modelsCreated', contextFilter),
+      resolve: instancesResolverFactory(model, manyResolver, contextFilter)
+    },
 
-      [updatedModelSubscriptionName]: {
-        namespace: nameFormatter.formatModelName(model.name),
-        args: {
-          query: { type: GraphQLJSON },
-          config: { type: GraphQLJSON }
-        },
-        type: new GraphQLList(modelType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated', contextFilter),
-        resolve: instancesResolverFactory(model, manyResolver, contextFilter)
+    [updatedModelSubscriptionName]: {
+      namespace: nameFormatter.formatModelName(model.name),
+      args: {
+        query: { type: GraphQLJSON },
+        config: { type: GraphQLJSON }
       },
+      type: new GraphQLList(modelType),
+      subscribe: subscribeToModelInstancesFactory(model, 'modelsUpdated', contextFilter),
+      resolve: instancesResolverFactory(model, manyResolver, contextFilter)
+    },
 
-      [deletedModelSubscriptionName]: {
-        namespace: nameFormatter.formatModelName(model.name),
-        args: {
-          config: { type: GraphQLJSON }
-        },
-        type: new GraphQLList(modelIDType),
-        subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted', contextFilter),
-        resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter, args).map((id) => ({ [model.primaryKeyAttribute]: id }))
-      }
+    [deletedModelSubscriptionName]: {
+      namespace: nameFormatter.formatModelName(model.name),
+      args: {
+        config: { type: GraphQLJSON }
+      },
+      type: new GraphQLList(modelIDType),
+      subscribe: subscribeToModelInstancesFactory(model, 'modelsDeleted', contextFilter),
+      resolve: (payloads, args, context) => payloadsReducer(model, payloads, context, contextFilter, args).map((id) => ({ [model.primaryKeyAttribute]: id }))
     }
   }
 }

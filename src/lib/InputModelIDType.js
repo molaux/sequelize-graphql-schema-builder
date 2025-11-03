@@ -1,4 +1,4 @@
-const { GraphQLID, GraphQLInputObjectType } = require('graphql')
+import { GraphQLID, GraphQLInputObjectType } from 'graphql'
 
 class InputModelIDType extends GraphQLInputObjectType {
 }
@@ -24,7 +24,7 @@ class InputModelIDTypeFactory {
   }
 }
 
-module.exports = {
+export {
   InputModelIDType,
   InputModelIDTypeFactory
 }

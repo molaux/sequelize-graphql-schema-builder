@@ -1,52 +1,54 @@
 'use strict'
-const {
+import {
   GraphQLString,
   GraphQLScalarType,
   GraphQLFloat
-} = require('graphql')
+} from 'graphql'
 
-const { typeMapper } = require('graphql-sequelize')
-const { DataTypes } = require('sequelize')
+import { DataTypes } from 'sequelize'
 
-const { cleanWhereQuery } = require('./lib/query.js')
-const {
+import { cleanWhereQuery } from './lib/query.js'
+import {
   findOptionsMerger,
   includesMerger,
   beforeResolverFactory,
   beforeModelResolverFactory,
   beforeAssociationResolverFactory
-} = require('./lib/resolvers.js')
+} from './lib/resolvers.js'
 
-const {
+import {
   loggerFactory
-} = require('./lib/logger.js')
+} from './lib/logger.js'
 
-const {
+import {
   getRequestedAttributes,
   resolveFragments
-} = require('./lib/graphql.js')
+} from './lib/graphql.js'
 
-const {
+import {
   nameFormatterFactory
-} = require('./lib/nameFormatter.js')
+} from './lib/nameFormatter.js'
 
-const {
-  builder: typesBuilder
-} = require('./lib/types')
+import {
+  builder as typesBuilder
+} from './lib/types.js'
 
-const {
-  builder: queriesBuilder,
+import {
+  builder as queriesBuilder,
   manyResolverFactory,
   countResolverFactory
-} = require('./lib/queries')
+} from './lib/queries.js'
 
-const {
-  builder: mutationsBuilder
-} = require('./lib/mutations')
+import {
+  builder as mutationsBuilder
+} from './lib/mutations.js'
 
-const {
-  builder: subscriptionsBuilder
-} = require('./lib/subscriptions')
+import {
+  builder as subscriptionsBuilder
+} from './lib/subscriptions.js'
+
+import graphQLSequelizePkg from 'graphql-sequelize'
+const { typeMapper } = graphQLSequelizePkg
 
 function fromISODate (value) {
   try {
@@ -216,7 +218,7 @@ const schemaBuilder = (sequelize, options) => {
   }
 }
 
-module.exports = {
+export {
   schemaBuilder,
   getRequestedAttributes,
   beforeResolverFactory,

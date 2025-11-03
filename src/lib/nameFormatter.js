@@ -1,6 +1,6 @@
-const pluralize = require('pluralize')
+import pluralize from 'pluralize'
 
-const nameFormatterFactory = namespace => ({
+export const nameFormatterFactory = (namespace) => ({
   namespace,
   modelToFieldMap: new Map(),
   fieldToModelMap: new Map(),
@@ -21,7 +21,7 @@ const nameFormatterFactory = namespace => ({
   formatQueryName: function (modelName) { return this.formatModelName(modelName) },
   formatModelMetaQueryName: function (type) { return `${this.formatModelName(type)}Meta` },
   formatInsertMutationName: function (modelName) { return `create${this.formatModelName(modelName)}` },
-  formatInsertManyMutationName: function (modelName) {return `createMany${this.formatManyModelName(modelName)}` },
+  formatInsertManyMutationName: function (modelName) { return `createMany${this.formatManyModelName(modelName)}` },
   formatDeleteMutationName: function (modelName) { return `delete${this.formatModelName(modelName)}` },
   formatUpdateMutationName: function (modelName) { return `update${this.formatModelName(modelName)}` },
   formatMockMutationName: function (modelName) { return `mock${this.formatModelName(modelName)}` },
@@ -53,7 +53,3 @@ const nameFormatterFactory = namespace => ({
   formatUpdatedSubscriptionName: function (modelName) { return `updated${this.formatModelName(modelName)}` },
   formatDeletedSubscriptionName: function (modelName) { return `deleted${this.formatModelName(modelName)}` }
 })
-
-module.exports = {
-  nameFormatterFactory
-}

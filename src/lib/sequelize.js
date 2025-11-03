@@ -1,10 +1,11 @@
-const { attributeFields } = require('graphql-sequelize')
-const { GraphQLList, GraphQLNonNull } = require('graphql')
-const { InputModelIDType } = require('./InputModelIDType')
-const { getRequestedAttributes, parseGraphQLArgs, resolveFragments } = require('./graphql')
-const { getFieldQuery } = require('./query')
+import { GraphQLList, GraphQLNonNull } from 'graphql'
+import { InputModelIDType } from './InputModelIDType.js'
+import { getRequestedAttributes, parseGraphQLArgs, resolveFragments } from './graphql.js'
+import { getFieldQuery } from './query.js'
+import { GraphQLUnionInputType } from './GraphQLUnionInputType.js'
 
-const { GraphQLUnionInputType } = require('./GraphQLUnionInputType')
+import graphQLSequelizePkg from 'graphql-sequelize'
+const { attributeFields } = graphQLSequelizePkg
 
 const getTargetKey = (association) => association.options.targetKey ?? association.options.sourceKey ?? association.target.primaryKeyAttribute
 
@@ -403,7 +404,7 @@ const getNestedElements = (model, infos, fieldNode, variables, nestedKeys, { nam
   return { includes, attributes }
 }
 
-module.exports = {
+export {
   getPrimaryKeyType,
   inputResolver,
   getNestedElements,

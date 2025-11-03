@@ -1,5 +1,5 @@
-const { GraphQLUnionInputTypeBuilder } = require('./GraphQLUnionInputType')
-const { InputModelIDTypeFactory } = require('./InputModelIDType')
+import { GraphQLUnionInputTypeBuilder } from './GraphQLUnionInputType.js'
+import { InputModelIDTypeFactory } from './InputModelIDType.js'
 const MODEL_ID = 'model_id'
 const MODEL_TYPE = 'model_type'
 
@@ -45,7 +45,7 @@ class InputModelAssociationType {
   }
 }
 
-module.exports = {
+export {
   InputModelAssociationType,
   inputModelAssociationDiscriminator,
   MODEL_ID,

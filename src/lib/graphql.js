@@ -1,5 +1,7 @@
-const { attributeFields } = require('graphql-sequelize')
-const { GraphQLNonNull, GraphQLID } = require('graphql')
+import { GraphQLNonNull, GraphQLID } from 'graphql'
+
+import graphQLSequelizePkg from 'graphql-sequelize'
+const { attributeFields } = graphQLSequelizePkg
 
 const getInsertInputFields = (model, { cache: typesCache, nameFormatter }) => {
   const attributes = attributeFields(model, { cache: typesCache })
@@ -134,7 +136,7 @@ const resolveFragments = (selections, infos, stack) => {
   return resolvedSelections
 }
 
-module.exports = {
+export {
   getInsertInputFields,
   getUpdateInputFields,
   mapAttributes,
