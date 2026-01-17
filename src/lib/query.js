@@ -82,7 +82,23 @@ const processTransform = (model, transform) => {
       throw new Error(`Literals arg is restricted to /^[a-z0-9_=]+$/ regex, got [${JSON.stringify(transform[key])}]`)
     }
 
-    if (key === 'fn' && transform[key][0] === 'sub') {
+    if (key === 'fn' && transform[key][0] === '/') {
+      return model.sequelize.literal(transform[key].slice(1).map(arg =>
+        typeof arg === 'object'
+          ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+          : `'${arg.replace('\'', '\\\'')}'`
+      ).join((' / ')))
+    }
+
+    if (key === 'fn' && transform[key][0] === '*') {
+      return model.sequelize.literal(transform[key].slice(1).map(arg =>
+        typeof arg === 'object'
+          ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+          : `'${arg.replace('\'', '\\\'')}'`
+      ).join((' * ')))
+    }
+
+    if (key === 'fn' && ['sub', '-'].includes(transform[key][0])) {
       return model.sequelize.literal(transform[key].slice(1).map(arg =>
         typeof arg === 'object'
           ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
@@ -90,7 +106,7 @@ const processTransform = (model, transform) => {
       ).join((' - ')))
     }
 
-    if (key === 'fn' && transform[key][0] === 'add') {
+    if (key === 'fn' && ['add', '+'].includes(transform[key][0])) {
       return model.sequelize.literal(transform[key].slice(1).map(arg =>
         typeof arg === 'object'
           ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
@@ -98,7 +114,7 @@ const processTransform = (model, transform) => {
       ).join((' + ')))
     }
 
-    if (key === 'fn' && transform[key][0] === 'equals') {
+    if (key === 'fn' && ['equals', '='].includes(transform[key][0])) {
       return model.sequelize.literal(transform[key].slice(1).map(arg =>
         typeof arg === 'object'
           ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
@@ -115,6 +131,48 @@ const processTransform = (model, transform) => {
         ).join((' + ')))
       }
     }
+
+    if (model.sequelize.options.dialect === 'postgres') {
+      if (key === 'fn' && transform[key][0] === 'extract') {
+        const args = transform[key].slice(1).map((arg) =>
+          typeof arg === 'object'
+            ? model.sequelize.dialect.queryGenerator.handleSequelizeMethod(processTransform(model, arg))
+            : `'${arg.replace('\'', '\\\'')}'`
+        )
+        const field = args[0].slice(1, -1)
+        if (![
+          'CENTURY',
+          'DAY',
+          'DECADE',
+          'DOW',
+          'DOY',
+          'EPOCH',
+          'HOUR',
+          'ISODOW',
+          'ISOYEAR',
+          'MICROSECONDS',
+          'MILLENNIUM',
+          'MILLISECONDS',
+          'MINUTE',
+          'MONTH',
+          'QUARTER',
+          'SECOND',
+          'TIMEZONE',
+          'TIMEZONE_HOUR',
+          'TIMEZONE_MINUTE',
+          'WEEK',
+          'YEAR'
+        ].includes(field.toUpperCase())) {
+          throw Error(`Uknown field «${field}» to be extracted wtih «extract (${field} from ...)»`)
+        }
+
+        if (args.length !== 2) {
+          throw Error('Extract function needs 2 arguments : extract (ARG1 from ARG2)')
+        }
+        return model.sequelize.literal(`extract (${field} from ${args[1]})`)
+      }
+    }
+
     if (Array.isArray(transform[key])) {
       return model.sequelize[key](...transform[key].map(arg => processTransform(model, arg)))
     } else {
