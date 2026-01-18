@@ -21,9 +21,8 @@
   ],
   "main": "src/index.js",
   "scripts": {
-    "postrelease": "yarn pack -f /home/node/releases/`node --no-warnings bin/package-name.js`",
     "prerelease": "yarn version --patch",
-    "release": "yarn pack"
+    "release": "yarn pack -f /home/node/releases/`node --no-warnings bin/package-name.js`"
   },
   "keywords": [
     "graphql",
