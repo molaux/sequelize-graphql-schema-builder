@@ -21,7 +21,9 @@
   ],
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postrelease": "yarn pack -f /home/node/releases/`node --no-warnings bin/package-name.js`",
+    "prerelease": "yarn version --patch",
+    "release": "yarn pack"
   },
   "keywords": [
     "graphql",
