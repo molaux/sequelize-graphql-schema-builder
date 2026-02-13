@@ -138,7 +138,6 @@ export const builder = (model, modelType, modelInsertInputType, modelUpdateInput
         atomic: { type: GraphQLBoolean }
       },
       resolve: async (parent, { input: inputList, atomic }, { pubSub, ...ctx }, ...rest) => {
-        console.log('Transaction starts')
         const transaction = (atomic === undefined) || atomic
           ? await sequelize.transaction()
           : null
@@ -161,17 +160,15 @@ export const builder = (model, modelType, modelInsertInputType, modelUpdateInput
             resolvers.push(instanceResolvers)
           }
           const instances = await model.bulkCreate(sequelizeInputList, { transaction })
-          console.log(instances)
-          await Promise.all(resolvers.map((instanceResolvers, i) => instanceResolvers.map(r => r(instances[i], 'set'))))
+          await Promise.all(resolvers.map((instanceResolvers, i) => Promise.all(instanceResolvers.map(r => r(instances[i], 'set')))))
           accumulatorPubSub?.publish('modelsCreated', { model, instances })
-          console.log(transaction)
+
           if (transaction) {
-            console.log('Will commit', sequelizeInputList)
-            // await transaction.commit()
-            console.log('Commited', sequelizeInputList)
+            await transaction.commit()
           }
 
           accumulatorPubSub?.flushTo(pubSub, ctx)
+
           return manyResolver(parent, {
             query: {
               where: {
@@ -182,14 +179,9 @@ export const builder = (model, modelType, modelInsertInputType, modelUpdateInput
             }
           }, { pubSub, ...ctx }, ...rest)
         } catch (error) {
-          console.error('SQL ERROR:', error)
-          console.error('SQL ERROR:', error?.sql)
-
-          try {
-            if (transaction) {
-              // await transaction.rollback()
-            }
-          } catch {}
+          if (transaction) {
+            await transaction.rollback()
+          }
           throw error
         }
       }
