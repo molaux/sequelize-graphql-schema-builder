@@ -140,7 +140,13 @@ const beforeAssociationResolverFactory = (targetModel, { nameFormatter, logger, 
   })
 
   // dir('bar', { foi: findOptions.include || [], nestedIncludes })
-  findOptions.include = nestedIncludes // includesMerger(findOptions.include || [], nestedIncludes)
+  // findOptions.include = nestedIncludes // includesMerger(findOptions.include || [], nestedIncludes)
+  if (findOptions.include !== undefined) {
+    // dir('bmr', { foi: findOptions.includ, includes })
+    findOptions.include = includesMerger(findOptions.include, nestedIncludes)
+  } else {
+    findOptions.include = nestedIncludes
+  }
 
   logger.log('beforeAssociationResolver', {
     'findOptions.include': findOptions.include,
